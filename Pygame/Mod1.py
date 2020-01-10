@@ -9,7 +9,7 @@ import click
 def main(filename):
     # init pygame stuff
     pygame.init()
-    screenSize = (400, 400)
+    screenSize = (800, 400)
     screen = pygame.display.set_mode(screenSize)
     pygame.display.set_caption("Mod1")
 
@@ -17,8 +17,11 @@ def main(filename):
     cam_coords = CameraCoords()
 
     #generating landscape
-    landscape_detail = 1
-    landscape = build_landscape(filename, landscape_detail)
+    landscape_size = 100
+    landscape_detail = 4
+    while landscape_size % landscape_detail != 0:
+        landscape_detail += 1
+    landscape = build_landscape(filename, landscape_size, landscape_detail)
 
     # main loop
     clock = pygame.time.Clock()
@@ -47,7 +50,7 @@ def main(filename):
                                  cam_coords,
                                  screenSize))
 
-        max_val = int(50 / landscape_detail) + 1
+        max_val = int(landscape_size / landscape_detail) + 1
         for i in range(len(landscape) - max_val):
             if (i + 1) % (max_val - 1) != 0 and (i + max_val) % (max_val - 1) != 0:
                 # set polygone color
@@ -58,10 +61,10 @@ def main(filename):
                 try:
                     outline = pygame.draw.polygon(screen,
                                                   color,
-                                                  (render[i],
-                                                   render[i+1],
-                                                   render[i+max_val],
-                                                   render[i+max_val-1]),
+                                                  (render[i+1],
+                                                   render[i],
+                                                   render[i+max_val-1],
+                                                   render[i+max_val]),
                                                   0)
                 except TypeError:
                     pass

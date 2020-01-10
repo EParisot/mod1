@@ -1,9 +1,12 @@
 import pygame
 from math import radians, sin, cos, tan, sqrt
+import numpy as np
+
+import Beziers
 
 #camera coordinates
 class CameraCoords(object):
-    def __init__(self, x=25, y=50, z=-50, rx=0, ry=-30, depth=400):
+    def __init__(self, x=50, y=50, z=-50, rx=0, ry=-20, depth=400):
         self.x = x
         self.y = y
         self.z = z
@@ -47,31 +50,95 @@ def get_2d(x, y, z, cam_coords, screenSize):
         return "error"
     return int(x), int(y)
 
-def parse_file(filename):
+# file input parsing
+def parse_point(line_data, landscape_size, landscape_detail):
+    int_data = list(map(int, line_data))
+    for i, elem in enumerate(int_data):
+        if i != 1:
+            while elem % landscape_detail != 0 and elem + 1 <= landscape_size:
+             elem += 1
+        int_data[i] = elem
+    return int_data
+
+def parse_file(filename, landscape_size, landscape_detail):
     data = []
     with open(filename) as f:
         for line in f:
             line_data = line.split(' ')
             if len(line_data) == 3:
                 try:
-                    data.append(list(map(int, line_data)))
+                    int_data = parse_point(line_data, landscape_size, landscape_detail)
+                    data.append(int_data)
                 except:
                     print("Invalid data : %s Ignored Point" % line, flush=True)
             else:
                 print("Incomplete data : %s Ignored Point" % line, flush=True)
     return data
 
-def build_landscape(filename, landscape_detail):
-    map_data = parse_file(filename)
-    print(map_data, flush=True)
+# expand dimention from (n, 3) to (x, y, 3) 
+def change_dim(landscape, landscape_size, landscape_detail):
+    k = 0
+    j = 0
+    i = 0
+    map3d = []
+    line_tab = []
+    for point in landscape:
+        if k % (landscape_size / landscape_detail) == 0:
+            if len(line_tab):
+                map3d.append(line_tab)
+                line_tab = []
+                j += 1
+                i = -1
+        line_tab.append(point)
+        i += 1
+        k += 1
+    map3d.append(line_tab)
+    return map3d
+
+# bezier curves
+def beziers_soft(map3d, landscape_size, landscape_detail):
+    soft = []
+    # vertical
+    for line in map3d:
+        soft.append(Beziers.bezier_curve(line, nTimes=landscape_size / landscape_detail))
+    # horizontal
+    for curr_col in range(len(map3d)):
+        columns = []
+        for line in range(len(map3d)):
+            for col in range(len(map3d)):
+                if col == curr_col:
+                    columns.append(soft[line][col])       
+        new_col = Beziers.bezier_curve(columns, nTimes=landscape_size / landscape_detail)
+        for line in range(len(soft)):
+            for col in range(len(soft)):
+                if col == curr_col:
+                    soft[line][col] = new_col[line]
+    return soft
+
+def soft_land(landscape, landscape_size, landscape_detail):
+    # dim adapt
+    map3d = change_dim(landscape, landscape_size, landscape_detail)
+    # soft function
+    soft = beziers_soft(map3d, landscape_size, landscape_detail)
+    # flatten
+    soft_landscape = []
+    for line in soft:
+        soft_landscape += line
+    return soft_landscape
+
+def build_landscape(filename, landscape_size, landscape_detail):
+    map_data = parse_file(filename, landscape_size, landscape_detail)
     landscape = []
-    for x in range(0, 50, landscape_detail):
-        for z in range(0, 50, landscape_detail):
+    for x in range(0, landscape_size, landscape_detail):
+        for z in range(0, landscape_size, landscape_detail):
             for i in range(len(map_data)):
                 if x == map_data[i][0] and z == map_data[i][2]:
-                    landscape.append((x, map_data[i][1], z))
-                else:
-                    landscape.append((x, 0, z))
+                    pt = (x, map_data[i][1], z)
+                    break
+                pt = (x, 0, z)
+            landscape.append(pt)
+    # Actual land building
+    landscape = soft_land(landscape, landscape_size, landscape_detail)
     return landscape
 
 def handle_events(cam_coords):
