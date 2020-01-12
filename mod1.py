@@ -34,8 +34,11 @@ def build_lanscape(n_points):
     return xi, yi
 
 def euclidean_distance(xa, ya, xb, yb):
+    # substract over x
     dx = np.subtract.outer(xa, xb)
+    # substract over y
     dy = np.subtract.outer(ya, yb)
+    # euclidean dist
     return np.sqrt((dx)**2 + (dy)**2)
 
 # Interpolation
@@ -77,20 +80,22 @@ def vispy_loop(landscape):
     from vispy.visuals import transforms
     from vispy import color
 
-    xi = landscape[0]
-    yi = landscape[1]
-    zi = landscape[2]
-
+    # buid canvas and camera
     canvas = scene.SceneCanvas(title="Mod1", size=(800,600), keys='interactive')
     view = canvas.central_widget.add_view()
     view.camera = scene.cameras.TurntableCamera(center=(50, 50, 50), scale_factor=200)
 
+    xi = landscape[0]
+    yi = landscape[1]
+    zi = landscape[2]
+    # draw landscape
     surface = scene.visuals.GridMesh(xi, yi, zi, colors=None, shading='smooth')
     surface.transform = transforms.STTransform(translate=(0., 0., 0.), scale=(1., 1., 0.5))
     tr = np.array(surface.transform.translate)
     tr[2] += 50
     surface.transform.translate = tr
 
+    # landscape colors
     surface.shininess = 0
     color_norm = zi / abs(np.amax(zi))
     colormap = color.get_colormap("terrain").map(color_norm).reshape(zi.shape + (-1,))
@@ -102,6 +107,7 @@ def vispy_loop(landscape):
                                 colormap[3::4]))
     surface.mesh_data.set_vertex_colors(colormap)
 
+    # start drawing
     view.add(surface)
     canvas.show()
 
