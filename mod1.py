@@ -1,5 +1,7 @@
 import click
+from collections import deque
 import numpy as np
+import time
 
 def parse_point(line_data):
     data = line_data.split(' ')
@@ -65,23 +67,71 @@ def plotly_draw_landscape(xi, yi, zi, n_points):
         center=dict(x=0, y=0, z=0),
         eye=dict(x=0.0, y=-2.5, z=0.7))
     fig.add_trace(go.Surface(x=xi, y=yi, z=zi, colorscale=colorscale, showscale=False))
-    fig.update_layout(scene=dict(aspectratio=dict(x=2, y=2, z=0.5)),
+    fig.update_layout(scene=dict(aspectratio=dict(x=1, y=1, z=0.5)),
                       scene_camera=camera)
     go_offline.plot(fig, filename='mod1.html',validate=True, auto_open=True)
 
-def vispy_draw_landscape(xi, yi, zi):
-    import vispy.plot as vp
+def vispy_loop(landscape):
+    import vispy
+    from vispy import app, scene, geometry
+    from vispy.visuals import transforms
     from vispy import color
-    fig = vp.Fig(show=False)
-    # colormap
-    cnorm = zi / abs(np.amax(zi))
-    c = color.get_colormap("terrain").map(cnorm).reshape(zi.shape + (-1,))
-    c = c.flatten().tolist()
-    c = list(map(lambda x,y,z,w:(x,y,z,w), c[0::4],c[1::4],c[2::4],c[3::4]))
-    # actual plot
-    suface = fig[0, 0].surface(zi)
-    suface.mesh_data.set_vertex_colors(c)
-    fig.show()
+
+    xi = landscape[0]
+    yi = landscape[1]
+    zi = landscape[2]
+
+    canvas = scene.SceneCanvas(title="Mod1", size=(800,600), keys='interactive')
+    view = canvas.central_widget.add_view()
+    view.camera = scene.cameras.TurntableCamera(center=(50, 50, 50), scale_factor=200)
+
+    surface = scene.visuals.GridMesh(xi, yi, zi, colors=None, shading='smooth')
+    surface.transform = transforms.STTransform(translate=(0., 0., 0.), scale=(1., 1., 0.5))
+    tr = np.array(surface.transform.translate)
+    tr[2] += 50
+    surface.transform.translate = tr
+
+    surface.shininess = 0
+    color_norm = zi / abs(np.amax(zi))
+    colormap = color.get_colormap("terrain").map(color_norm).reshape(zi.shape + (-1,))
+    colormap = colormap.flatten().tolist()
+    colormap = list(map(lambda x,y,z,w:(x,y,z,w), 
+                                colormap[0::4], 
+                                colormap[1::4], 
+                                colormap[2::4], 
+                                colormap[3::4]))
+    surface.mesh_data.set_vertex_colors(colormap)
+
+    view.add(surface)
+    canvas.show()
+
+    def new_drop(x, y):
+        drop = scene.visuals.Sphere(radius=0.1,  color=(0, 0, 1, 1))
+        drop.transform = transforms.STTransform(translate=(0., 0., 0.), scale=(1., 1., 1.))
+        tr = np.array(drop.transform.translate)
+        tr[0] = x
+        tr[1] = y
+        tr[2] = 100
+        drop.transform.translate = tr
+        return drop
+
+    drops = deque(maxlen=50)
+    def rain(var):
+        # add a new drop
+        drop = new_drop(np.random.randint(0, 99), np.random.randint(0, 99))
+        drops.append(drop)
+        view.add(drop)
+        # update drops
+        for drop in drops:
+            tr = np.array(drop.transform.translate)
+            tr[2] -= 1
+            drop.transform.translate = tr
+
+    timer = app.Timer(interval=0, connect=rain)
+    timer.start()
+    
+    app.run()
+
 
 @click.command()
 @click.argument("filename", default="maps/map0.mod1", type=click.Path(exists=True))
@@ -104,16 +154,15 @@ def main(filename):
     # IDW interpolation
     zi = simple_idw(x, y, z, xi, yi)
     final_shape = (n_points, n_points)
-    # plotly
+    """# plotly
     plotly_draw_landscape(xi.reshape(final_shape),
                    yi.reshape(final_shape),
                    zi.reshape(final_shape),
-                   n_points)
+                   n_points)"""
     # vispy
-    vispy_draw_landscape(xi.reshape(final_shape),
+    vispy_loop((xi.reshape(final_shape),
                    yi.reshape(final_shape),
-                   zi.reshape(final_shape))
-
+                   zi.reshape(final_shape)))
 
 if __name__ == "__main__":
     main()
