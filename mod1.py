@@ -2,7 +2,7 @@ import click
 import numpy as np
 import time
 
-from vispy_visu import vispy_loop
+from vpython_visu import vpython_draw_landscape
 
 
 def parse_point(line_data):
@@ -55,9 +55,6 @@ def simple_idw(x, y, z, xi, yi):
     zi = np.dot(weights.T, z)
     return zi
 
-
-
-
 @click.command()
 @click.argument("filename", default="maps/map0.mod1", type=click.Path(exists=True))
 def main(filename):
@@ -79,13 +76,8 @@ def main(filename):
     # IDW interpolation
     zi = simple_idw(x, y, z, xi, yi)
     final_shape = (n_points, n_points)
-    """# plotly
-    plotly_draw_landscape(xi.reshape(final_shape),
-                   yi.reshape(final_shape),
-                   zi.reshape(final_shape),
-                   n_points)"""
-    # vispy
-    vispy_loop((xi.reshape(final_shape),
+    # vpython
+    vpython_draw_landscape((xi.reshape(final_shape),
                    yi.reshape(final_shape),
                    zi.reshape(final_shape)))
 

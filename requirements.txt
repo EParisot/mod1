@@ -1,4 +1,2 @@
-PyQt5
-matplotlib
-vispy
+vpython
 numpy
