@@ -1,4 +1,4 @@
-from vpython import scene, quad, sphere, vertex, vec, color, compound
+from vpython import scene, quad, sphere, vertex, vec, color, compound, cross
 
 from collections import deque
 import numpy as np
@@ -33,14 +33,21 @@ def get_color(h):
 
 def draw_map(xi, yi, zi, n_points):
     terrain = []
-    for row in range(n_points):
-        for col in range(n_points):
-            if row != n_points-1 and col != n_points-1:
-                a = vertex( pos=vec(xi[row][col], yi[row][col], zi[row][col]), color=get_color(zi[row][col]))
-                b = vertex( pos=vec(xi[row][col+1], yi[row][col+1], zi[row][col+1]), color=get_color(zi[row][col+1]))
-                c = vertex( pos=vec(xi[row+1][col+1], yi[row+1][col+1], zi[row+1][col+1]), color=get_color(zi[row+1][col+1]))
-                d = vertex( pos=vec(xi[row+1][col], yi[row+1][col], zi[row+1][col]), color=get_color(zi[row+1][col]))
-                terrain.append(quad(vs=[a,b,c,d]))
+    for row in range(n_points-1):
+        for col in range(n_points-1):
+            a = vertex( pos=vec(xi[row][col], yi[row][col], zi[row][col]), color=get_color(zi[row][col]), shininess=0)
+            b = vertex( pos=vec(xi[row][col+1], yi[row][col+1], zi[row][col+1]), color=get_color(zi[row][col+1]), shininess=0)
+            c = vertex( pos=vec(xi[row+1][col+1], yi[row+1][col+1], zi[row+1][col+1]), color=get_color(zi[row+1][col+1]), shininess=0)
+            d = vertex( pos=vec(xi[row+1][col], yi[row+1][col], zi[row+1][col]), color=get_color(zi[row+1][col]), shininess=0)
+            norm_b = - b.pos - a.pos.norm()
+            norm_d = - d.pos - a.pos.norm()
+            a.normal = cross(norm_b, norm_d)
+            terrain.append(quad(vs=[a,b,c,d]))
+    for row in range(n_points-1):
+        for col in range(n_points-1):
+            terrain[row*(n_points-2) + col].v0.normal = (terrain[row*(n_points-2) + col].v0.normal + 
+                                                        terrain[(row+1)*(n_points-2) + col].v0.normal + 
+                                                        terrain[row*(n_points-2) + col+1].v0.normal) / 3
     compound(terrain)
     water = []
     for row in range(n_points):
@@ -109,7 +116,10 @@ def vpython_draw_landscape(landscape):
     scene.height = 800
     scene.center = vec(n_points / 2, n_points / 2, 0)
     scene.forward = vec(0, 0.5, -0.2)
+    scene.up = vec(0, 0, 1)
     scene.bind("keydown", keyDown)
+
+    scene.lights.pop(0)
 
     # draw map
     water_comp = draw_map(xi, yi, zi, n_points)
