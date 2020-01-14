@@ -5,9 +5,18 @@ import numpy as np
 import time
 
 run = True
-def mouseDown(ev):
-    global run
-    run = not run
+key = ""
+rain = False
+flood = False
+def keyDown(ev):
+    global key, run, rain, flood
+    key = ev.key
+    if key == "r":
+        rain = not rain
+    elif key == "f":
+        flood = not flood
+    if ev.key == " ":
+        run = not run
 
 water_color = vec(0, 0, 0.6)
 
@@ -100,7 +109,7 @@ def vpython_draw_landscape(landscape):
     scene.height = 800
     scene.center = vec(n_points / 2, n_points / 2, 0)
     scene.forward = vec(0, 0.5, -0.2)
-    scene.bind("mousedown", mouseDown)
+    scene.bind("keydown", keyDown)
 
     # draw map
     water_comp = draw_map(xi, yi, zi, n_points)
@@ -108,19 +117,24 @@ def vpython_draw_landscape(landscape):
     drops = []
     levels = 0.0
     while True:
+        # handle events
         while not run:
             scene.waitfor('redraw')
-        # create drops
-        x = np.random.randint(0, n_points)
-        y = np.random.randint(0, n_points)
-        drop = sphere(pos=vec(x, y, n_points), radius=0.5, color=water_color, opacity=0.3)
-        drops.append(drop)
-        # update drops
-        start_flood = update_drops(drops, levels, zi, n_points)
-        # flood water
-        if start_flood == True and levels < n_points:
-            water_comp.pos.z += 0.01
-            levels += 0.01
+        if rain == True:
+            # create drops
+            x = np.random.randint(0, n_points)
+            y = np.random.randint(0, n_points)
+            drop = sphere(pos=vec(x, y, n_points), radius=0.5, color=water_color, opacity=0.3)
+            drops.append(drop)
+            # update drops
+            start_flood = update_drops(drops, levels, zi, n_points)
+        if flood == True or rain == True:
+            if flood == True:
+                start_flood = True
+            # flood water
+            if start_flood == True and levels < n_points:
+                water_comp.pos.z += 0.01
+                levels += 0.01
         # TODO wave(s)
 
         # set speed
