@@ -55,11 +55,11 @@ def update_drops(drops, levels, zi, n_points):
     start_flood = False
     for i, drop in enumerate(drops):
         drop_pos = drop.pos
-        if drop_pos.z > 0:
+        if drop_pos.z >= 0:
             alt = drop_pos.z - (zi[int(drop_pos.y)][int(drop_pos.x)] if levels < zi[int(drop_pos.y)][int(drop_pos.x)] else levels)
             if alt > 1:
                 drop.pos.z -= 1
-            elif alt >= 0.1:
+            elif alt > 0.1:
                 drop.pos.z = (zi[int(drop_pos.y)][int(drop_pos.x)] if levels < zi[int(drop_pos.y)][int(drop_pos.x)] else levels)
             else:
                 if int(drop_pos.y) - 1 >= 0 and \
@@ -96,8 +96,8 @@ def vpython_draw_landscape(landscape):
     n_points = len(zi[0])
 
     scene.background = vec(0.95, 0.95, 0.95)
-    scene.width = 1200
-    scene.height = 600
+    scene.width = 1600
+    scene.height = 800
     scene.center = vec(n_points / 2, n_points / 2, 0)
     scene.forward = vec(0, 0.5, -0.2)
     scene.bind("mousedown", mouseDown)
