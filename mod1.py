@@ -2,7 +2,8 @@ import click
 import numpy as np
 import time
 
-from vpython_visu import vpython_draw_landscape
+from plotly_visu import plotly_draw_landscape
+from panda3d_visu import panda3d_draw_landscape
 
 
 def parse_point(line_data):
@@ -28,7 +29,7 @@ def parse_file(filename):
     return data_list
 
 # Build flat land
-def build_lanscape(n_points):
+def build_landscape(n_points):
     xi = range(n_points)
     yi = range(n_points)
     xi, yi = np.meshgrid(xi, yi)
@@ -48,7 +49,7 @@ def simple_idw(x, y, z, xi, yi):
     # Compute distance matrix
     dist = euclidean_distance(x, y, xi, yi)
     # In IDW, weights are 1 / distance !! TWEAKED !!
-    weights = 1 / (dist + 1e-12)**3
+    weights = 1.0 / (dist + 1e-12)**3
     # Make weights sum to one
     weights /= weights.sum(axis=0)
     # Multiply the weights for each interpolated point by all observed Z-values
@@ -72,14 +73,17 @@ def main(filename):
                 y = np.append(y, j)
                 z = np.append(z, 0)
     # init landscape
-    xi, yi = build_lanscape(n_points)
+    xi, yi = build_landscape(n_points)
     # IDW interpolation
     zi = simple_idw(x, y, z, xi, yi)
     final_shape = (n_points, n_points)
-    # vpython
-    vpython_draw_landscape((xi.reshape(final_shape),
-                   yi.reshape(final_shape),
-                   zi.reshape(final_shape)))
+
+    """plotly_draw_landscape(xi.reshape(final_shape),
+                           yi.reshape(final_shape),
+                           zi.reshape(final_shape), n_points)"""
+    panda3d_draw_landscape((xi.reshape(final_shape),
+                           yi.reshape(final_shape),
+                           zi.reshape(final_shape)), n_points)
 
 if __name__ == "__main__":
     main()
