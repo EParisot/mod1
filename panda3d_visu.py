@@ -5,8 +5,6 @@ from panda3d.core import Geom, GeomNode, GeomVertexFormat, \
                          GeomTriangles, \
                          DirectionalLight, AmbientLight, \
                          TransparencyAttrib, PerlinNoise2, AntialiasAttrib
-from sphere import IcoSphere
-
 import numpy as np
 
 class MyApp(ShowBase):
