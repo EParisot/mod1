@@ -1,2 +1,2 @@
-vpython
+panda3d
 numpy
