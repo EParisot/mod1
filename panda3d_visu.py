@@ -4,7 +4,8 @@ from panda3d.core import Geom, GeomNode, GeomVertexFormat, \
                          GeomVertexRewriter, GeomVertexReader, \
                          GeomTriangles, \
                          DirectionalLight, AmbientLight, \
-                         TransparencyAttrib
+                         TransparencyAttrib, PerlinNoise2, AntialiasAttrib
+from sphere import IcoSphere
 
 import numpy as np
 
@@ -19,8 +20,10 @@ class MyApp(ShowBase):
 
         ShowBase.__init__(self)
         self.setBackgroundColor(0,0,0)
-        self.trackball.node().setPos(0, 300, -20)
-        self.trackball.node().setHpr(0, 30, 0)
+        self.trackball.node().setPos(0, 250, -50)
+        #self.trackball.node().setHpr(0, 180, 180)
+        self.trackball.node().setHpr(0, 0, 0)
+
 
         self.landscape_nodePath = self.draw_landscape_mesh()
         self.landscape_nodePath.setPos(-50, -50, 0)
@@ -28,26 +31,24 @@ class MyApp(ShowBase):
         self.water_nodePath.setPos(-50, -50, 0)
         self.water_border_nodePath.setPos(-50, -50, 0)
         self.create_light()
+
+        self.noise = PerlinNoise2()
+        self.noise.setScale(16)
+
         self.taskMgr.add(self.animate_water, "water_anim")
         
 
     def create_light(self):
-        """# Create Ambient Light
-        ambientLight = AmbientLight('ambientLight')
-        ambientLightNP = render.attachNewNode(ambientLight)
-        render.setLight(ambientLightNP)"""
-
         # Directional light 01
         directionalLight = DirectionalLight('directionalLight')
         directionalLightNP = render.attachNewNode(directionalLight)
         # This light is facing backwards, towards the camera.
-        directionalLightNP.setHpr(150, -30, 0)
+        directionalLightNP.setHpr(150, -50, 0)
         render.setLight(directionalLightNP)
-
         # Directional light 02
         directionalLight = DirectionalLight('directionalLight')
         directionalLightNP = render.attachNewNode(directionalLight)
-        directionalLightNP.setHpr(50, -30, 0)
+        directionalLightNP.setHpr(50, -80, 0)
         render.setLight(directionalLightNP)
 
         
@@ -93,6 +94,7 @@ class MyApp(ShowBase):
                                       (j+1)*(self.n_points) + i)
 
         geom = Geom(vdata)
+        prim.closePrimitive()
         geom.addPrimitive(prim)
         node = GeomNode('gnode')
         node.addGeom(geom)
@@ -129,6 +131,7 @@ class MyApp(ShowBase):
                                         (j+1)*(self.n_points) + i)
 
         geom = Geom(vdata)
+        prim.closePrimitive()
         geom.addPrimitive(prim)
         node = GeomNode('gnode')
         node.addGeom(geom)
@@ -140,7 +143,6 @@ class MyApp(ShowBase):
         vdata.setNumRows(8)
 
         vertex = GeomVertexWriter(vdata, 'vertex')
-        #normal = GeomVertexWriter(vdata, 'normal')
         color = GeomVertexWriter(vdata, 'color')
 
         for i in [0, 99]:
@@ -182,13 +184,13 @@ class MyApp(ShowBase):
             for j in range(self.n_points):
                 for i in range(self.n_points):
                     v = vertex.getData3f()
+                    # Noise
+                    offset = task.time * 6
+                    waves = self.noise.noise(i + offset, j + offset) * 4
+                    waves *= np.random.uniform(0.5, 1)
                     # flood
-                    self.wz[j][i] = task.time + 1 + (np.random.uniform(-0.5, 0.5) \
-                        if j != 0 and i != 0 and j != self.n_points-1 and i != self.n_points-1 else 0)
-                    # waves computation
-                    # TODO
-    
-                    # render water
+                    self.wz[j][i] = task.time + 1 + (waves \
+                        if j != 0 and i != 0 and j != self.n_points-1 and i != self.n_points-1 else 0) # borders
                     vertex.setData3f(v[0], v[1], self.wz[j][i])
                     n = np.array([v[0], v[1], self.wz[j][i]])
                     norm = n / np.linalg.norm(n)
@@ -203,13 +205,11 @@ class MyApp(ShowBase):
             vertex = GeomVertexRewriter(water_border_data, 'vertex')
             normal = GeomVertexRewriter(water_border_data, 'normal')
             for i in range(0, 8, 2):
-
                 v = vertex.getData3f()
                 vertex.setData3f(v[0], v[1], self.wz[j][i])
                 n = np.array([v[0], v[1], self.wz[j][i]])
                 norm = n / np.linalg.norm(n)
                 normal.setData3f(norm[0], norm[1], norm[2])
-
                 v = vertex.getData3f()
                 vertex.setData3f(v[0], v[1], 0)
                 n = np.array([v[0], v[1], 1e-12])
