@@ -7,8 +7,6 @@ from panda3d.core import loadPrcFileData, Geom, GeomNode, GeomVertexFormat, \
                          DirectionalLight, AmbientLight, \
                          TransparencyAttrib, PerlinNoise2
 import numpy as np
-np.seterr(all='raise')
-
 
 loadPrcFileData("", "window-title Mod1")
 loadPrcFileData("", "fullscreen 0") # Set to 1 for fullscreen
@@ -33,6 +31,7 @@ class Events_Handler(DirectObject.DirectObject):
             self.base.taskMgr.remove("flood")
         else:
             self.H = 1
+            self.base.taskMgr.removeTasksMatching("flood")
             self.base.taskMgr.add(self.base.flood, "flood")
         self.flood = not self.flood
 
@@ -40,6 +39,7 @@ class Events_Handler(DirectObject.DirectObject):
         if self.rain == True:
             self.base.taskMgr.remove("rain")
         else:
+            self.base.taskMgr.removeTasksMatching("rain")
             self.base.taskMgr.add(self.base.rain, "rain")
         self.rain = not self.rain
 
@@ -50,7 +50,7 @@ class Events_Handler(DirectObject.DirectObject):
             # Initial condition for wave.
             for i in range(10):
                 self.base.wz[:, i:i+1] = (20 + self.base.H) * np.cos((i+1)/10)             # Wave start
-
+            self.base.taskMgr.removeTasksMatching("wave")
             self.base.taskMgr.add(self.base.wave, "wave")
         self.wave = not self.wave
 
@@ -76,10 +76,10 @@ class MyApp(ShowBase):
         self.v_n = np.zeros((self.N_x, self.N_y))                           # To hold v at current time step
 
         # Initial conditions for u and v.
-        self.u_n[:, :] = 0.0             # Initial condition for u
-        self.v_n[:, :] = 0.0             # Initial condition for u
-        self.u_n[-1, :] = 0.0            # Ensuring initial u satisfy BC
-        self.v_n[:, -1] = 0.0            # Ensuring initial v satisfy BC
+        self.u_n[:, :] = 0.0                                                # Initial condition for u
+        self.v_n[:, :] = 0.0                                                # Initial condition for u
+        self.u_n[-1, :] = 0.0                                               # Ensuring initial u satisfy BC
+        self.v_n[:, -1] = 0.0                                               # Ensuring initial v satisfy BC
 
         # Init Window
         ShowBase.__init__(self)
@@ -90,9 +90,6 @@ class MyApp(ShowBase):
         self.draw_landscape_mesh()
         self.draw_water_mesh()
         self.create_light()
-        # Init Noise
-        self.noise = PerlinNoise2()
-        self.noise.setScale(16)
         # Wait for events
         Events_Handler(self)
         
@@ -236,20 +233,15 @@ class MyApp(ShowBase):
     def flood(self, task):
         # Animate Water Surface
         if self.H < self.n_points:
-            #step_np1 = self.water_physic() 
+            step_np1 = self.water_physic() 
             vertex = GeomVertexRewriter(self.water_vdata, 'vertex')
             normal = GeomVertexRewriter(self.water_vdata, 'normal')
             for j in range(0, self.n_points, self.details):
                 for i in range(0, self.n_points, self.details):
-                    # Noise
-                    offset = self.H * 12
-                    waves = self.noise.noise(i + offset, j + offset) * \
-                        10 * self.H / 100
-                    #self.wz[j][i] = step_np1[j//self.details][i//self.details]
                     # Flood
                     if j != 0 and i != 0 and j != self.n_points - self.details and \
                                             i != self.n_points - self.details:
-                        self.wz[j][i] = self.H + waves
+                        self.wz[j][i] = step_np1[j//self.details][i//self.details]
                     else:
                         self.wz[j][i] = self.H # borders condition
                     v = vertex.getData3f()
@@ -348,10 +340,9 @@ class MyApp(ShowBase):
         # Obstacles boundary condition
         for j in range(0, self.n_points, self.details):
             for i in range(0, self.n_points, self.details):
-                if j % self.details == 0 and i % self.details == 0:
-                    if self.lz[j][i] > step_n[j//self.details][i//self.details]:
-                        v_np1[j//self.details][i//self.details] = 0.0
-                        u_np1[j//self.details][i//self.details] = 0.0
+                if step_n[j//self.details][i//self.details] < self.lz[j][i]:
+                    v_np1[j//self.details][i//self.details] = 0.0
+                    u_np1[j//self.details][i//self.details] = 0.0
 
         # Computing arrays needed for the upwind scheme in the eta equation.
         h_e[:-1, :] = np.where(u_np1[:-1, :] > 0, step_n[:-1, :] + self.H, step_n[1:, :] + self.H)
