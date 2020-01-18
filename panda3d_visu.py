@@ -143,17 +143,22 @@ class MyApp(ShowBase):
         vdata = GeomVertexData('water_border', _format, Geom.UHDynamic)
         vdata.setNumRows(8)
         vertex = GeomVertexWriter(vdata, 'vertex')
+        normal = GeomVertexRewriter(vdata, 'normal')
         color = GeomVertexWriter(vdata, 'color')
         for i in [0, 99]:
-            vertex.addData3f(i, 0, 1)
-            color.addData4f(0.3, 0.3, 1, 0.8)
-            vertex.addData3f(i, 0, 0)
-            color.addData4f(0.3, 0.3, 1, 0.8)
+            for j in range(1, -1, -1):
+                vertex.addData3f(i, 0, j)
+                color.addData4f(0.3, 0.3, 1, 0.8)
+                n = np.array([i, 0, 1e-12 if j == 0 else 1])
+                norm = n / np.linalg.norm(n)
+                normal.addData3f(norm[0], norm[1], norm[2])
         for i in [99, 0]:
-            vertex.addData3f(i, 99, 1)
-            color.addData4f(0.3, 0.3, 1, 0.8)
-            vertex.addData3f(i, 99, 0)
-            color.addData4f(0.3, 0.3, 1, 0.8)
+            for j in range(1, -1, -1):
+                vertex.addData3f(i, 99, j)
+                color.addData4f(0.3, 0.3, 1, 0.8)
+                n = np.array([i, 99, 1e-12 if j == 0 else 1])
+                norm = n / np.linalg.norm(n)
+                normal.addData3f(norm[0], norm[1], norm[2])
         prim = GeomTriangles(Geom.UHDynamic)
         for i in range(0, 8, 2):
             prim.add_vertices(i, i+1 if i+1 < 8 else i+1-8, i+2 if i+2 < 8 else i+2-8)
@@ -201,6 +206,7 @@ class MyApp(ShowBase):
                 n = np.array([v[0], v[1], self.wz[j][i]])
                 norm = n / np.linalg.norm(n)
                 normal.setData3f(norm[0], norm[1], norm[2])
+
                 v = vertex.getData3f()
                 vertex.setData3f(v[0], v[1], 0)
                 n = np.array([v[0], v[1], 1e-12])
