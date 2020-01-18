@@ -7,6 +7,8 @@ from panda3d.core import loadPrcFileData, Geom, GeomNode, GeomVertexFormat, \
                          DirectionalLight, AmbientLight, \
                          TransparencyAttrib, PerlinNoise2
 import numpy as np
+np.seterr(all='raise')
+
 
 loadPrcFileData("", "window-title Mod1")
 loadPrcFileData("", "fullscreen 0") # Set to 1 for fullscreen
@@ -30,6 +32,7 @@ class Events_Handler(DirectObject.DirectObject):
         if self.flood == True:
             self.base.taskMgr.remove("flood")
         else:
+            self.H = 1
             self.base.taskMgr.add(self.base.flood, "flood")
         self.flood = not self.flood
 
@@ -45,12 +48,9 @@ class Events_Handler(DirectObject.DirectObject):
             self.base.taskMgr.remove("wave")
         else:
             # Initial condition for wave.
-            self.base.wz[:, 0:10] = 50
-            # Initial conditions for u and v.
-            self.base.u_n[:, :] = 0.0             # Initial condition for u
-            self.base.v_n[:, :] = 0.0             # Initial condition for u
-            self.base.u_n[-1, :] = 0.0            # Ensuring initial u satisfy BC
-            self.base.v_n[:, -1] = 0.0            # Ensuring initial v satisfy BC
+            for i in range(10):
+                self.base.wz[:, i:i+1] = (20 + self.base.H) * np.cos((i+1)/10)             # Wave start
+
             self.base.taskMgr.add(self.base.wave, "wave")
         self.wave = not self.wave
 
@@ -74,6 +74,12 @@ class MyApp(ShowBase):
         self.dt = 0.1*min(self.dx, self.dy)/np.sqrt(self.g * self.H)        # Time step (defined from the CFL condition)
         self.u_n = np.zeros((self.N_x, self.N_y))                           # To hold u at current time step
         self.v_n = np.zeros((self.N_x, self.N_y))                           # To hold v at current time step
+
+        # Initial conditions for u and v.
+        self.u_n[:, :] = 0.0             # Initial condition for u
+        self.v_n[:, :] = 0.0             # Initial condition for u
+        self.u_n[-1, :] = 0.0            # Ensuring initial u satisfy BC
+        self.v_n[:, -1] = 0.0            # Ensuring initial v satisfy BC
 
         # Init Window
         ShowBase.__init__(self)
@@ -229,19 +235,23 @@ class MyApp(ShowBase):
 
     def flood(self, task):
         # Animate Water Surface
-        if task.time + 1 < self.n_points:
+        if self.H < self.n_points:
+            #step_np1 = self.water_physic() 
             vertex = GeomVertexRewriter(self.water_vdata, 'vertex')
             normal = GeomVertexRewriter(self.water_vdata, 'normal')
             for j in range(0, self.n_points, self.details):
                 for i in range(0, self.n_points, self.details):
                     # Noise
-                    offset = task.time * 12
+                    offset = self.H * 12
                     waves = self.noise.noise(i + offset, j + offset) * \
-                        10 * task.time / 100
+                        10 * self.H / 100
+                    #self.wz[j][i] = step_np1[j//self.details][i//self.details]
                     # Flood
-                    self.wz[j][i] = task.time + 1 + (waves \
-                        if j != 0 and i != 0 and j != self.n_points - self.details and \
-                            i != self.n_points - self.details else 0) # borders condition
+                    if j != 0 and i != 0 and j != self.n_points - self.details and \
+                                            i != self.n_points - self.details:
+                        self.wz[j][i] = self.H + waves
+                    else:
+                        self.wz[j][i] = self.H # borders condition
                     v = vertex.getData3f()
                     vertex.setData3f(v[0], v[1], self.wz[j][i])
                     n = np.array([v[0], v[1], self.wz[j][i]])
@@ -252,8 +262,8 @@ class MyApp(ShowBase):
             normal = GeomVertexRewriter(self.water_border_vdata, 'normal')
             for i in range(0, 8, 2):
                 v = vertex.getData3f()
-                vertex.setData3f(v[0], v[1], task.time + 1)
-                n = np.array([v[0], v[1], task.time + 1])
+                vertex.setData3f(v[0], v[1], self.H)
+                n = np.array([v[0], v[1], self.H])
                 norm = n / np.linalg.norm(n)
                 normal.setData3f(norm[0], norm[1], norm[2])
                 v = vertex.getData3f()
@@ -263,67 +273,30 @@ class MyApp(ShowBase):
                 normal.setData3f(norm[0], norm[1], norm[2])
         else:
             task.done()
+        self.H = task.time + 1
         return task.cont
 
     def rain(self, task):
         return task.cont
     
     def wave(self, task):
-        u_np1 = np.zeros((self.N_x, self.N_y))    # To hold u at next time step
-        v_np1 = np.zeros((self.N_x, self.N_y))    # To hold v at next time step
-        eta_n = np.zeros((self.N_x, self.N_y))    # To hold eta at current time step
-        eta_np1 = np.zeros((self.N_x, self.N_y))  # To hold eta at next time step
-
-        # Temporary variables (each time step) for upwind scheme in eta equation
-        h_e = np.zeros((self.N_x, self.N_y))
-        h_w = np.zeros((self.N_x, self.N_y))
-        h_n = np.zeros((self.N_x, self.N_y))
-        h_s = np.zeros((self.N_x, self.N_y))
-        uhwe = np.zeros((self.N_x, self.N_y))
-        vhns = np.zeros((self.N_x, self.N_y))
-
-        # grab current mesh
-        for j in range(0, self.n_points, self.details):
-            for i in range(0, self.n_points, self.details):
-                eta_n[j//self.details][i//self.details] = self.wz[j][i]
-
-        # Computing values for u and v at next time step
-        u_np1[:-1, :] = self.u_n[:-1, :] - self.g*self.dt/self.dx*(eta_n[1:, :] - eta_n[:-1, :])
-        v_np1[:, :-1] = self.v_n[:, :-1] - self.g * self.dt/self.dy*(eta_n[:, 1:] - eta_n[:, :-1])
-        v_np1[:, -1] = 0.0      # Northern boundary condition
-        u_np1[-1, :] = 0.0      # Eastern boundary condition
-
-        # Computing arrays needed for the upwind scheme in the eta equation.
-        h_e[:-1, :] = np.where(u_np1[:-1, :] > 0, eta_n[:-1, :] + self.H, eta_n[1:, :] + self.H)
-        h_e[-1, :] = eta_n[-1, :] + self.H
-        h_w[0, :] = eta_n[0, :] + self.H
-        h_w[1:, :] = np.where(u_np1[:-1, :] > 0, eta_n[:-1, :] + self.H, eta_n[1:, :] + self.H)
-        h_n[:, :-1] = np.where(v_np1[:, :-1] > 0, eta_n[:, :-1] + self.H, eta_n[:, 1:] + self.H)
-        h_n[:, -1] = eta_n[:, -1] + self.H
-        h_s[:, 0] = eta_n[:, 0] + self.H
-        h_s[:, 1:] = np.where(v_np1[:, :-1] > 0, eta_n[:, :-1] + self.H, eta_n[:, 1:] + self.H)
-        uhwe[0, :] = u_np1[0, :]*h_e[0, :]
-        uhwe[1:, :] = u_np1[1:, :]*h_e[1:, :] - u_np1[:-1, :]*h_w[1:, :]
-        vhns[:, 0] = v_np1[:, 0]*h_n[:, 0]
-        vhns[:, 1:] = v_np1[:, 1:]*h_n[:, 1:] - v_np1[:, :-1]*h_s[:, 1:]
-
-        # Computing eta values at next time step
-        eta_np1[:, :] = eta_n[:, :] - self.dt*(uhwe[:, :]/self.dx + vhns[:, :]/self.dy)    # Without source/sink
-        self.u_n = np.copy(u_np1)        # Update u for next iteration
-        self.v_n = np.copy(v_np1)        # Update v for next iteration
-
+        # Compute physic
+        step_np1 = self.water_physic()
+        self.H = np.mean(step_np1)
         # render wave
         vertex = GeomVertexRewriter(self.water_vdata, 'vertex')
         normal = GeomVertexRewriter(self.water_vdata, 'normal')
         for j in range(0, self.n_points, self.details):
             for i in range(0, self.n_points, self.details):
-                if j != 0 and i != 0 and j != self.n_points - self.details and i != self.n_points - self.details:
-                    self.wz[j][i] = eta_np1[j//self.details][i//self.details]
-                else:
-                    self.wz[j][i] = self.H
+                self.wz[j][i] = step_np1[j//self.details][i//self.details]
                 v = vertex.getData3f()
-                vertex.setData3f(v[0], v[1], self.wz[j][i])
-                n = np.array([v[0], v[1], self.wz[j][i]])
+                if j != 0 and i != 0 and j != self.n_points - self.details and \
+                                            i != self.n_points - self.details:
+                    vertex.setData3f(v[0], v[1], self.wz[j][i])
+                    n = np.array([v[0], v[1], self.wz[j][i]])
+                else:
+                    vertex.setData3f(v[0], v[1], self.H)
+                    n = np.array([v[0], v[1], self.H])
                 norm = n / np.linalg.norm(n)
                 normal.setData3f(norm[0], norm[1], norm[2])
         # Extend Water Borders
@@ -345,6 +318,65 @@ class MyApp(ShowBase):
     
     def flush(self, task):
         return task.cont
+    
+    def water_physic(self):
+        step_n = np.zeros((self.N_x, self.N_y))    # To hold eta at current time step
+        step_np1 = np.zeros((self.N_x, self.N_y))  # To hold eta at next time step
+
+        # grab current mesh
+        for j in range(0, self.n_points, self.details):
+            for i in range(0, self.n_points, self.details):
+                step_n[j//self.details][i//self.details] = self.wz[j][i]
+
+        u_np1 = np.zeros((self.N_x, self.N_y))    # To hold u at next time step
+        v_np1 = np.zeros((self.N_x, self.N_y))    # To hold v at next time step
+        
+        # Temporary variables (each time step) for upwind scheme in eta equation
+        h_e = np.zeros((self.N_x, self.N_y))
+        h_w = np.zeros((self.N_x, self.N_y))
+        h_n = np.zeros((self.N_x, self.N_y))
+        h_s = np.zeros((self.N_x, self.N_y))
+        uhwe = np.zeros((self.N_x, self.N_y))
+        vhns = np.zeros((self.N_x, self.N_y))
+
+        # Computing values for u and v at next time step
+        u_np1[:-1, :] = self.u_n[:-1, :] - self.g*self.dt/self.dx*(step_n[1:, :] - step_n[:-1, :])
+        v_np1[:, :-1] = self.v_n[:, :-1] - self.g * self.dt/self.dy*(step_n[:, 1:] - step_n[:, :-1])
+        v_np1[:, -1] = 0.0      # Northern boundary condition
+        u_np1[-1, :] = 0.0      # Eastern boundary condition
+
+        # Obstacles boundary condition
+        for j in range(0, self.n_points, self.details):
+            for i in range(0, self.n_points, self.details):
+                if j % self.details == 0 and i % self.details == 0:
+                    if self.lz[j][i] > step_n[j//self.details][i//self.details]:
+                        v_np1[j//self.details][i//self.details] = 0.0
+                        u_np1[j//self.details][i//self.details] = 0.0
+
+        # Computing arrays needed for the upwind scheme in the eta equation.
+        h_e[:-1, :] = np.where(u_np1[:-1, :] > 0, step_n[:-1, :] + self.H, step_n[1:, :] + self.H)
+        h_e[-1, :] = step_n[-1, :] + self.H
+        h_w[0, :] = step_n[0, :] + self.H
+        h_w[1:, :] = np.where(u_np1[:-1, :] > 0, step_n[:-1, :] + self.H, step_n[1:, :] + self.H)
+        h_n[:, :-1] = np.where(v_np1[:, :-1] > 0, step_n[:, :-1] + self.H, step_n[:, 1:] + self.H)
+        h_n[:, -1] = step_n[:, -1] + self.H
+        h_s[:, 0] = step_n[:, 0] + self.H
+        h_s[:, 1:] = np.where(v_np1[:, :-1] > 0, step_n[:, :-1] + self.H, step_n[:, 1:] + self.H)
+
+
+        uhwe[0, :] = u_np1[0, :]*h_e[0, :]
+        uhwe[1:, :] = u_np1[1:, :]*h_e[1:, :] - u_np1[:-1, :]*h_w[1:, :]
+        vhns[:, 0] = v_np1[:, 0]*h_n[:, 0]
+        vhns[:, 1:] = v_np1[:, 1:]*h_n[:, 1:] - v_np1[:, :-1]*h_s[:, 1:]
+
+        # Computing eta values at next time step
+        step_np1[:, :] = step_n[:, :] - self.dt*(uhwe[:, :]/self.dx + vhns[:, :]/self.dy)    # Without source/sink
+
+        self.u_n = np.copy(u_np1)        # Update u for next iteration
+        self.v_n = np.copy(v_np1)        # Update v for next iteration
+
+        return step_np1
+
             
     
 def panda3d_draw_landscape(landscape, n_points):
