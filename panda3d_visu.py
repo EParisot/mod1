@@ -44,6 +44,13 @@ class Events_Handler(DirectObject.DirectObject):
         if self.wave == True:
             self.base.taskMgr.remove("wave")
         else:
+            # Initial condition for wave.
+            self.base.wz[:, 0:10] = 50
+            # Initial conditions for u and v.
+            self.base.u_n[:, :] = 0.0             # Initial condition for u
+            self.base.v_n[:, :] = 0.0             # Initial condition for u
+            self.base.u_n[-1, :] = 0.0            # Ensuring initial u satisfy BC
+            self.base.v_n[:, -1] = 0.0            # Ensuring initial v satisfy BC
             self.base.taskMgr.add(self.base.wave, "wave")
         self.wave = not self.wave
 
@@ -56,13 +63,24 @@ class MyApp(ShowBase):
         self.lz = landscape[2]
         self.wz = np.ones((n_points, n_points))
         self.n_points = n_points
+        self.details = 4
+        self.H = 1                                                          # Depth of fluid [m] at start
+
+        self.g = 9.81                                                       # Acceleration of gravity [m/s^2]
+        self.N_x = self.n_points // self.details                            # Number of grid points in x-direction
+        self.N_y = self.n_points // self.details                            # Number of grid points in y-direction
+        self.dx = self.n_points/(self.N_x - 1)                              # Grid spacing in x-direction
+        self.dy = self.n_points/(self.N_y - 1)                              # Grid spacing in y-direction
+        self.dt = 0.1*min(self.dx, self.dy)/np.sqrt(self.g * self.H)        # Time step (defined from the CFL condition)
+        self.u_n = np.zeros((self.N_x, self.N_y))                           # To hold u at current time step
+        self.v_n = np.zeros((self.N_x, self.N_y))                           # To hold v at current time step
+
         # Init Window
         ShowBase.__init__(self)
         self.setBackgroundColor(0,0,0)
         self.trackball.node().setPos(0, 250, -50)
 
         # Init Meshes
-        self.details = 2
         self.draw_landscape_mesh()
         self.draw_water_mesh()
         self.create_light()
@@ -139,10 +157,10 @@ class MyApp(ShowBase):
         
         for j in range(0, self.n_points, self.details):
             for i in range(0, self.n_points, self.details):
-                if j == self.n_points - 2:
-                    j += 1
-                if i == self.n_points - 2:
-                    i += 1
+                if j == self.n_points - self.details:
+                    j = self.n_points - 1
+                if i == self.n_points - self.details:
+                    i = self.n_points - 1
                 # Water Vertices
                 vertex.addData3f(self.x[j][i], self.y[j][i], self.wz[j][i])
                 # Water Color
@@ -234,8 +252,8 @@ class MyApp(ShowBase):
             normal = GeomVertexRewriter(self.water_border_vdata, 'normal')
             for i in range(0, 8, 2):
                 v = vertex.getData3f()
-                vertex.setData3f(v[0], v[1], self.wz[j][i])
-                n = np.array([v[0], v[1], self.wz[j][i]])
+                vertex.setData3f(v[0], v[1], task.time + 1)
+                n = np.array([v[0], v[1], task.time + 1])
                 norm = n / np.linalg.norm(n)
                 normal.setData3f(norm[0], norm[1], norm[2])
                 v = vertex.getData3f()
@@ -251,6 +269,78 @@ class MyApp(ShowBase):
         return task.cont
     
     def wave(self, task):
+        u_np1 = np.zeros((self.N_x, self.N_y))    # To hold u at next time step
+        v_np1 = np.zeros((self.N_x, self.N_y))    # To hold v at next time step
+        eta_n = np.zeros((self.N_x, self.N_y))    # To hold eta at current time step
+        eta_np1 = np.zeros((self.N_x, self.N_y))  # To hold eta at next time step
+
+        # Temporary variables (each time step) for upwind scheme in eta equation
+        h_e = np.zeros((self.N_x, self.N_y))
+        h_w = np.zeros((self.N_x, self.N_y))
+        h_n = np.zeros((self.N_x, self.N_y))
+        h_s = np.zeros((self.N_x, self.N_y))
+        uhwe = np.zeros((self.N_x, self.N_y))
+        vhns = np.zeros((self.N_x, self.N_y))
+
+        # grab current mesh
+        for j in range(0, self.n_points, self.details):
+            for i in range(0, self.n_points, self.details):
+                eta_n[j//self.details][i//self.details] = self.wz[j][i]
+
+        # Computing values for u and v at next time step
+        u_np1[:-1, :] = self.u_n[:-1, :] - self.g*self.dt/self.dx*(eta_n[1:, :] - eta_n[:-1, :])
+        v_np1[:, :-1] = self.v_n[:, :-1] - self.g * self.dt/self.dy*(eta_n[:, 1:] - eta_n[:, :-1])
+        v_np1[:, -1] = 0.0      # Northern boundary condition
+        u_np1[-1, :] = 0.0      # Eastern boundary condition
+
+        # Computing arrays needed for the upwind scheme in the eta equation.
+        h_e[:-1, :] = np.where(u_np1[:-1, :] > 0, eta_n[:-1, :] + self.H, eta_n[1:, :] + self.H)
+        h_e[-1, :] = eta_n[-1, :] + self.H
+        h_w[0, :] = eta_n[0, :] + self.H
+        h_w[1:, :] = np.where(u_np1[:-1, :] > 0, eta_n[:-1, :] + self.H, eta_n[1:, :] + self.H)
+        h_n[:, :-1] = np.where(v_np1[:, :-1] > 0, eta_n[:, :-1] + self.H, eta_n[:, 1:] + self.H)
+        h_n[:, -1] = eta_n[:, -1] + self.H
+        h_s[:, 0] = eta_n[:, 0] + self.H
+        h_s[:, 1:] = np.where(v_np1[:, :-1] > 0, eta_n[:, :-1] + self.H, eta_n[:, 1:] + self.H)
+        uhwe[0, :] = u_np1[0, :]*h_e[0, :]
+        uhwe[1:, :] = u_np1[1:, :]*h_e[1:, :] - u_np1[:-1, :]*h_w[1:, :]
+        vhns[:, 0] = v_np1[:, 0]*h_n[:, 0]
+        vhns[:, 1:] = v_np1[:, 1:]*h_n[:, 1:] - v_np1[:, :-1]*h_s[:, 1:]
+
+        # Computing eta values at next time step
+        eta_np1[:, :] = eta_n[:, :] - self.dt*(uhwe[:, :]/self.dx + vhns[:, :]/self.dy)    # Without source/sink
+        self.u_n = np.copy(u_np1)        # Update u for next iteration
+        self.v_n = np.copy(v_np1)        # Update v for next iteration
+
+        # render wave
+        vertex = GeomVertexRewriter(self.water_vdata, 'vertex')
+        normal = GeomVertexRewriter(self.water_vdata, 'normal')
+        for j in range(0, self.n_points, self.details):
+            for i in range(0, self.n_points, self.details):
+                if j != 0 and i != 0 and j != self.n_points - self.details and i != self.n_points - self.details:
+                    self.wz[j][i] = eta_np1[j//self.details][i//self.details]
+                else:
+                    self.wz[j][i] = self.H
+                v = vertex.getData3f()
+                vertex.setData3f(v[0], v[1], self.wz[j][i])
+                n = np.array([v[0], v[1], self.wz[j][i]])
+                norm = n / np.linalg.norm(n)
+                normal.setData3f(norm[0], norm[1], norm[2])
+        # Extend Water Borders
+        vertex = GeomVertexRewriter(self.water_border_vdata, 'vertex')
+        normal = GeomVertexRewriter(self.water_border_vdata, 'normal')
+        for i in range(0, 8, 2):
+            v = vertex.getData3f()
+            vertex.setData3f(v[0], v[1], self.H)
+            n = np.array([v[0], v[1], self.H])
+            norm = n / np.linalg.norm(n)
+            normal.setData3f(norm[0], norm[1], norm[2])
+            v = vertex.getData3f()
+            vertex.setData3f(v[0], v[1], 0)
+            n = np.array([v[0], v[1], 1e-12])
+            norm = n / np.linalg.norm(n)
+            normal.setData3f(norm[0], norm[1], norm[2])
+            
         return task.cont
     
     def flush(self, task):
