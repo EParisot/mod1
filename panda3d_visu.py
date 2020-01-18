@@ -1,11 +1,25 @@
 from direct.showbase.ShowBase import ShowBase
+from direct.showbase import DirectObject
 from panda3d.core import Geom, GeomNode, GeomVertexFormat, \
                          GeomVertexData, GeomVertexWriter, \
                          GeomVertexRewriter, GeomVertexReader, \
                          GeomTriangles, \
                          DirectionalLight, AmbientLight, \
-                         TransparencyAttrib, PerlinNoise2, AntialiasAttrib
+                         TransparencyAttrib, PerlinNoise2
 import numpy as np
+
+class Events_Handler(DirectObject.DirectObject):
+    def __init__(self, base):
+        self.base = base
+        self.run = True
+        self.accept("space", self.handle_flood)
+
+    def handle_flood(self):
+        if self.run == True:
+            self.base.taskMgr.remove("flood")
+        else:
+            self.base.taskMgr.add(self.base.flood, "flood")
+        self.run = not self.run
 
 class MyApp(ShowBase):
 
@@ -29,7 +43,8 @@ class MyApp(ShowBase):
 
         self.noise = PerlinNoise2()
         self.noise.setScale(16)
-        self.taskMgr.add(self.animate_water, "water_anim")
+
+        ev = Events_Handler(self)
         
 
     def create_light(self):
@@ -130,12 +145,12 @@ class MyApp(ShowBase):
         vertex = GeomVertexWriter(vdata, 'vertex')
         color = GeomVertexWriter(vdata, 'color')
         for i in [0, 99]:
-            vertex.addData3f(i, 0, 0)
+            vertex.addData3f(i, 0, 1)
             color.addData4f(0.3, 0.3, 1, 0.8)
             vertex.addData3f(i, 0, 0)
             color.addData4f(0.3, 0.3, 1, 0.8)
         for i in [99, 0]:
-            vertex.addData3f(i, 99, 0)
+            vertex.addData3f(i, 99, 1)
             color.addData4f(0.3, 0.3, 1, 0.8)
             vertex.addData3f(i, 99, 0)
             color.addData4f(0.3, 0.3, 1, 0.8)
@@ -152,7 +167,7 @@ class MyApp(ShowBase):
 
         return water_nodePath, water_border_nodePath
 
-    def animate_water(self, task):
+    def flood(self, task):
         if task.time + 1 < self.n_points:
             water_node = self.water_nodePath.node()
             water_geom = water_node.modifyGeom(0)
@@ -164,7 +179,7 @@ class MyApp(ShowBase):
                 for i in range(self.n_points):
                     # Noise
                     offset = task.time * 12
-                    waves = self.noise.noise(i + offset, j + offset) * 4 * np.random.uniform(0.6, 1)
+                    waves = self.noise.noise(i + offset, j + offset) * np.random.uniform(0.6, 1) * 10 * task.time / 100
                     # flood
                     self.wz[j][i] = task.time + 1 + (waves \
                         if j != 0 and i != 0 and j != self.n_points-1 and i != self.n_points-1 else 0) # borders

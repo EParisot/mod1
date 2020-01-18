@@ -2,7 +2,6 @@ import click
 import numpy as np
 import time
 
-from plotly_visu import plotly_draw_landscape
 from panda3d_visu import panda3d_draw_landscape
 
 
@@ -78,9 +77,6 @@ def main(filename):
     zi = simple_idw(x, y, z, xi, yi)
     final_shape = (n_points, n_points)
 
-    """plotly_draw_landscape(xi.reshape(final_shape),
-                           yi.reshape(final_shape),
-                           zi.reshape(final_shape), n_points)"""
     panda3d_draw_landscape((xi.reshape(final_shape),
                            yi.reshape(final_shape),
                            zi.reshape(final_shape)), n_points)
