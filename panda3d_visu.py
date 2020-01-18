@@ -1,6 +1,6 @@
 from direct.showbase.ShowBase import ShowBase
 from direct.showbase import DirectObject
-from panda3d.core import Geom, GeomNode, GeomVertexFormat, \
+from panda3d.core import loadPrcFileData, Geom, GeomNode, GeomVertexFormat, \
                          GeomVertexData, GeomVertexWriter, \
                          GeomVertexRewriter, GeomVertexReader, \
                          GeomTriangles, \
@@ -8,18 +8,45 @@ from panda3d.core import Geom, GeomNode, GeomVertexFormat, \
                          TransparencyAttrib, PerlinNoise2
 import numpy as np
 
+loadPrcFileData("", "window-title Mod1")
+loadPrcFileData("", "fullscreen 0") # Set to 1 for fullscreen
+loadPrcFileData("", "win-size 1280 720")
+loadPrcFileData("", "show-frame-rate-meter #t")
+loadPrcFileData("", "framebuffer-multisample 1")
+loadPrcFileData("", "multisamples 2")
+
 class Events_Handler(DirectObject.DirectObject):
     def __init__(self, base):
         self.base = base
-        self.run = True
-        self.accept("space", self.handle_flood)
+        self.flood = False
+        self.rain = False
+        self.wave = False
+        self.accept("f", self.handle_flood)
+        self.accept("r", self.handle_rain)
+        self.accept("w", self.handle_wave)
+
 
     def handle_flood(self):
-        if self.run == True:
+        if self.flood == True:
             self.base.taskMgr.remove("flood")
         else:
             self.base.taskMgr.add(self.base.flood, "flood")
-        self.run = not self.run
+        self.flood = not self.flood
+
+    def handle_rain(self):
+        if self.rain == True:
+            self.base.taskMgr.remove("rain")
+        else:
+            self.base.taskMgr.add(self.base.rain, "rain")
+        self.rain = not self.rain
+
+    def handle_wave(self):
+        if self.wave == True:
+            self.base.taskMgr.remove("wave")
+        else:
+            self.base.taskMgr.add(self.base.wave, "wave")
+        self.wave = not self.wave
+
 
 class MyApp(ShowBase):
 
@@ -33,18 +60,17 @@ class MyApp(ShowBase):
         ShowBase.__init__(self)
         self.setBackgroundColor(0,0,0)
         self.trackball.node().setPos(0, 250, -50)
+
         # Init Meshes
-        self.landscape_nodePath = self.draw_landscape_mesh()
-        self.landscape_nodePath.setPos(-50, -50, 0)
-        self.water_nodePath, self.water_border_nodePath = self.draw_water_mesh()
-        self.water_nodePath.setPos(-50, -50, 0)
-        self.water_border_nodePath.setPos(-50, -50, 0)
+        self.details = 2
+        self.draw_landscape_mesh()
+        self.draw_water_mesh()
         self.create_light()
         # Init Noise
         self.noise = PerlinNoise2()
         self.noise.setScale(16)
         # Wait for events
-        ev = Events_Handler(self)
+        Events_Handler(self)
         
     def create_light(self):
         directionalLight = DirectionalLight('directionalLight1')
@@ -58,11 +84,11 @@ class MyApp(ShowBase):
 
     def draw_landscape_mesh(self):
         _format = GeomVertexFormat.get_v3n3cp()
-        vdata = GeomVertexData('terrain', _format, Geom.UHStatic)
-        vdata.setNumRows(self.n_points**2)
-        vertex = GeomVertexWriter(vdata, 'vertex')
-        normal = GeomVertexWriter(vdata, 'normal')
-        color = GeomVertexWriter(vdata, 'color')
+        self.landscape_vdata = GeomVertexData('terrain', _format, Geom.UHStatic)
+        self.landscape_vdata.setNumRows(self.n_points**2)
+        vertex = GeomVertexWriter(self.landscape_vdata, 'vertex')
+        normal = GeomVertexWriter(self.landscape_vdata, 'normal')
+        color = GeomVertexWriter(self.landscape_vdata, 'color')
         for j in range(self.n_points):
             for i in range(self.n_points):
                 # Terrain Vertices
@@ -95,23 +121,28 @@ class MyApp(ShowBase):
                     prim.add_vertices(j*(self.n_points) + (i+1),
                                       (j+1)*(self.n_points) + (i+1),
                                       (j+1)*(self.n_points) + i)
-        geom = Geom(vdata)
+        geom = Geom(self.landscape_vdata)
         prim.closePrimitive()
         geom.addPrimitive(prim)
         node = GeomNode('gnode')
         node.addGeom(geom)
         landscape_nodePath = render.attachNewNode(node)
-        return landscape_nodePath
+        landscape_nodePath.setPos(-50, -50, 0)
 
     def draw_water_mesh(self):
         _format = GeomVertexFormat.get_v3n3cp()
-        vdata = GeomVertexData('water', _format, Geom.UHDynamic)
-        vdata.setNumRows(self.n_points**2)
-        vertex = GeomVertexWriter(vdata, 'vertex')
-        normal = GeomVertexWriter(vdata, 'normal')
-        color = GeomVertexWriter(vdata, 'color')
-        for j in range(self.n_points):
-            for i in range(self.n_points):
+        self.water_vdata = GeomVertexData('water', _format, Geom.UHDynamic)
+        self.water_vdata.setNumRows((self.n_points // self.details)**2)
+        vertex = GeomVertexWriter(self.water_vdata, 'vertex')
+        normal = GeomVertexWriter(self.water_vdata, 'normal')
+        color = GeomVertexWriter(self.water_vdata, 'color')
+        
+        for j in range(0, self.n_points, self.details):
+            for i in range(0, self.n_points, self.details):
+                if j == self.n_points - 2:
+                    j += 1
+                if i == self.n_points - 2:
+                    i += 1
                 # Water Vertices
                 vertex.addData3f(self.x[j][i], self.y[j][i], self.wz[j][i])
                 # Water Color
@@ -122,29 +153,30 @@ class MyApp(ShowBase):
                 normal.addData3f(norm[0], norm[1], norm[2])
         # Water Primitive
         prim = GeomTriangles(Geom.UHDynamic)
-        for j in range(self.n_points):
-            for i in range(self.n_points):
-                if j != self.n_points-1 and i != self.n_points-1:
-                    prim.add_vertices(j*(self.n_points) + i,
-                                    j*(self.n_points) + (i+1),
-                                    (j+1)*(self.n_points) + i)
-                    prim.add_vertices(j*(self.n_points) + (i+1),
-                                    (j+1)*(self.n_points) + (i+1),
-                                    (j+1)*(self.n_points) + i)
-        geom = Geom(vdata)
+        for j in range(self.n_points//self.details):
+            for i in range(self.n_points//self.details):
+                if j != (self.n_points//self.details)-1 and i != (self.n_points//self.details)-1:
+                    prim.add_vertices(j*(self.n_points//self.details) + i,
+                                    j*(self.n_points//self.details) + (i+1),
+                                    (j+1)*(self.n_points//self.details) + i)
+                    prim.add_vertices(j*(self.n_points//self.details) + (i+1),
+                                    (j+1)*(self.n_points//self.details) + (i+1),
+                                    (j+1)*(self.n_points//self.details) + i)
+        geom = Geom(self.water_vdata)
         prim.closePrimitive()
         geom.addPrimitive(prim)
         node = GeomNode('gnode')
         node.addGeom(geom)
         water_nodePath = render.attachNewNode(node)
         water_nodePath.setTransparency(TransparencyAttrib.MAlpha)
+        water_nodePath.setPos(-50, -50, 0)
 
         # Border
-        vdata = GeomVertexData('water_border', _format, Geom.UHDynamic)
-        vdata.setNumRows(8)
-        vertex = GeomVertexWriter(vdata, 'vertex')
-        normal = GeomVertexRewriter(vdata, 'normal')
-        color = GeomVertexWriter(vdata, 'color')
+        self.water_border_vdata = GeomVertexData('water_border', _format, Geom.UHDynamic)
+        self.water_border_vdata.setNumRows(8)
+        vertex = GeomVertexWriter(self.water_border_vdata, 'vertex')
+        normal = GeomVertexRewriter(self.water_border_vdata, 'normal')
+        color = GeomVertexWriter(self.water_border_vdata, 'color')
         for i in [0, 99]:
             for j in range(1, -1, -1):
                 # Borders Vertices
@@ -169,46 +201,37 @@ class MyApp(ShowBase):
                 i+2 if i+2 < 8 else i+2-8)
             prim.add_vertices(i+2 if i+2 < 8 else i+2-8, \
                 i+1 if i+1 < 8 else i+1-8, i+3 if i+3 < 8 else i+3-8)
-        geom = Geom(vdata)
+        geom = Geom(self.water_border_vdata)
         geom.addPrimitive(prim)
         node = GeomNode('gnode')
         node.addGeom(geom)
         water_border_nodePath = render.attachNewNode(node)
         water_border_nodePath.setTransparency(TransparencyAttrib.MAlpha)
-
-        return water_nodePath, water_border_nodePath
+        water_border_nodePath.setPos(-50, -50, 0)
 
     def flood(self, task):
         # Animate Water Surface
         if task.time + 1 < self.n_points:
-            water_node = self.water_nodePath.node()
-            water_geom = water_node.modifyGeom(0)
-            water_data = water_geom.modifyVertexData()
-            water_data.setNumRows(self.n_points**2)
-            vertex = GeomVertexRewriter(water_data, 'vertex')
-            normal = GeomVertexRewriter(water_data, 'normal')
-            for j in range(self.n_points):
-                for i in range(self.n_points):
+            vertex = GeomVertexRewriter(self.water_vdata, 'vertex')
+            normal = GeomVertexRewriter(self.water_vdata, 'normal')
+            for j in range(0, self.n_points, self.details):
+                for i in range(0, self.n_points, self.details):
                     # Noise
                     offset = task.time * 12
                     waves = self.noise.noise(i + offset, j + offset) * \
-                        np.random.uniform(0.6, 1) * 10 * task.time / 100
-                    # flood
+                        10 * task.time / 100
+                    # Flood
                     self.wz[j][i] = task.time + 1 + (waves \
-                        if j != 0 and i != 0 and j != self.n_points-1 and \
-                            i != self.n_points-1 else 0) # borders
+                        if j != 0 and i != 0 and j != self.n_points - self.details and \
+                            i != self.n_points - self.details else 0) # borders condition
                     v = vertex.getData3f()
                     vertex.setData3f(v[0], v[1], self.wz[j][i])
                     n = np.array([v[0], v[1], self.wz[j][i]])
                     norm = n / np.linalg.norm(n)
                     normal.setData3f(norm[0], norm[1], norm[2])
             # Extend Water Borders
-            water_border_node = self.water_border_nodePath.node()
-            water_border_geom = water_border_node.modifyGeom(0)
-            water_border_data = water_border_geom.modifyVertexData()
-            water_border_data.setNumRows(8)
-            vertex = GeomVertexRewriter(water_border_data, 'vertex')
-            normal = GeomVertexRewriter(water_border_data, 'normal')
+            vertex = GeomVertexRewriter(self.water_border_vdata, 'vertex')
+            normal = GeomVertexRewriter(self.water_border_vdata, 'normal')
             for i in range(0, 8, 2):
                 v = vertex.getData3f()
                 vertex.setData3f(v[0], v[1], self.wz[j][i])
@@ -222,6 +245,15 @@ class MyApp(ShowBase):
                 normal.setData3f(norm[0], norm[1], norm[2])
         else:
             task.done()
+        return task.cont
+
+    def rain(self, task):
+        return task.cont
+    
+    def wave(self, task):
+        return task.cont
+    
+    def flush(self, task):
         return task.cont
             
     
