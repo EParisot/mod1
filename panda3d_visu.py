@@ -1,11 +1,8 @@
 from direct.showbase.ShowBase import ShowBase
 from direct.showbase import DirectObject
-from panda3d.core import loadPrcFileData, Geom, GeomNode, GeomVertexFormat, \
-                         GeomVertexData, GeomVertexWriter, \
-                         GeomVertexRewriter, GeomVertexReader, \
-                         GeomTriangles, \
-                         DirectionalLight, AmbientLight, \
-                         TransparencyAttrib, PerlinNoise2
+from panda3d.core import loadPrcFileData, Geom, GeomTriangles, GeomNode, GeomVertexFormat, GeomVertexData, \
+                         GeomVertexWriter, GeomVertexRewriter, GeomVertexReader, \
+                         DirectionalLight, TransparencyAttrib
 import numpy as np
 
 loadPrcFileData("", "window-title Mod1")
@@ -24,7 +21,6 @@ class Events_Handler(DirectObject.DirectObject):
         self.accept("f", self.handle_flood)
         self.accept("r", self.handle_rain)
         self.accept("w", self.handle_wave)
-
 
     def handle_flood(self):
         if self.flood == True:
@@ -56,7 +52,6 @@ class Events_Handler(DirectObject.DirectObject):
 
 
 class MyApp(ShowBase):
-
     def __init__(self, landscape, n_points):
         self.x = landscape[0]
         self.y = landscape[1]
@@ -87,9 +82,10 @@ class MyApp(ShowBase):
         self.trackball.node().setPos(0, 250, -50)
 
         # Init Meshes
-        self.draw_landscape_mesh()
+        self.landscape_nodePath = self.draw_landscape_mesh()
         self.draw_water_mesh()
         self.create_light()
+
         # Wait for events
         Events_Handler(self)
         
@@ -152,6 +148,7 @@ class MyApp(ShowBase):
         node.addGeom(geom)
         landscape_nodePath = render.attachNewNode(node)
         landscape_nodePath.setPos(-50, -50, 0)
+        return landscape_nodePath
 
     def draw_water_mesh(self):
         _format = GeomVertexFormat.get_v3n3cp()
@@ -273,14 +270,11 @@ class MyApp(ShowBase):
             self.H -= self.dt
         
         return task.cont
-
-    def rain(self, task):
-        return task.cont
     
     def wave(self, task):
         # Compute physic
         step_np1 = self.water_physic()
-        self.H = np.mean(step_np1)
+        self.H += 0.1 * (np.mean(step_np1) - self.H)
         # render wave
         vertex = GeomVertexRewriter(self.water_vdata, 'vertex')
         normal = GeomVertexRewriter(self.water_vdata, 'normal')
@@ -314,6 +308,9 @@ class MyApp(ShowBase):
             
         return task.cont
     
+    def rain(self, task):
+        return task.cont
+
     def water_physic(self):
         # recalc dt to avoid explosion as H grows
         self.dt = 0.1*min(self.dx, self.dy)/np.sqrt(self.g * self.H)
@@ -346,7 +343,7 @@ class MyApp(ShowBase):
         # Obstacles boundary condition
         for j in range(0, self.n_points, self.details):
             for i in range(0, self.n_points, self.details):
-                if step_n[j//self.details][i//self.details] < self.lz[j][i]:
+                if step_n[j//self.details][i//self.details] <= self.lz[j][i]:
                     v_np1[j//self.details][i//self.details] = 0.0
                     u_np1[j//self.details][i//self.details] = 0.0
 
@@ -373,8 +370,6 @@ class MyApp(ShowBase):
         self.v_n = np.copy(v_np1)        # Update v for next iteration
 
         return step_np1
-
-            
     
 def panda3d_draw_landscape(landscape, n_points):
     app = MyApp(landscape, n_points)
