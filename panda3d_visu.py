@@ -29,8 +29,8 @@ class Events_Handler(DirectObject.DirectObject):
     def handle_flood(self):
         if self.flood == True:
             self.base.taskMgr.remove("flood")
-        else:
-            self.H = 1
+            self.base.flush = not self.base.flush
+        elif self.wave == False and self.rain == False:
             self.base.taskMgr.removeTasksMatching("flood")
             self.base.taskMgr.add(self.base.flood, "flood")
         self.flood = not self.flood
@@ -38,7 +38,7 @@ class Events_Handler(DirectObject.DirectObject):
     def handle_rain(self):
         if self.rain == True:
             self.base.taskMgr.remove("rain")
-        else:
+        elif self.flood == False and self.wave == False:
             self.base.taskMgr.removeTasksMatching("rain")
             self.base.taskMgr.add(self.base.rain, "rain")
         self.rain = not self.rain
@@ -46,7 +46,7 @@ class Events_Handler(DirectObject.DirectObject):
     def handle_wave(self):
         if self.wave == True:
             self.base.taskMgr.remove("wave")
-        else:
+        elif self.rain == False and self.flood == False:
             # Initial condition for wave.
             for i in range(10):
                 self.base.wz[:, i:i+1] = (20 + self.base.H) * np.cos((i+1)/10)             # Wave start
@@ -65,7 +65,7 @@ class MyApp(ShowBase):
         self.n_points = n_points
         self.details = 4
         self.H = 1                                                          # Depth of fluid [m] at start
-
+        self.flush = False
         self.g = 9.81                                                       # Acceleration of gravity [m/s^2]
         self.N_x = self.n_points // self.details                            # Number of grid points in x-direction
         self.N_y = self.n_points // self.details                            # Number of grid points in y-direction
@@ -128,7 +128,10 @@ class MyApp(ShowBase):
                 else:
                     color.addData4(0.8, 1, 1, 1)
                 # Terrain Normals
-                n = np.array([self.x[j][i], self.y[j][i], self.lz[j][i]])
+                if self.lz[j][i] != 0:
+                    n = np.array([self.x[j][i], self.y[j][i], self.lz[j][i]])
+                else:
+                    n = np.array([self.x[j][i], self.y[j][i], 1e-12])
                 norm = n / np.linalg.norm(n)
                 normal.addData3f(norm[0], norm[1], norm[2])
         # Terrain Primitive
@@ -232,40 +235,43 @@ class MyApp(ShowBase):
 
     def flood(self, task):
         # Animate Water Surface
-        if self.H < self.n_points:
-            step_np1 = self.water_physic() 
-            vertex = GeomVertexRewriter(self.water_vdata, 'vertex')
-            normal = GeomVertexRewriter(self.water_vdata, 'normal')
-            for j in range(0, self.n_points, self.details):
-                for i in range(0, self.n_points, self.details):
-                    # Flood
-                    if j != 0 and i != 0 and j != self.n_points - self.details and \
-                                            i != self.n_points - self.details:
-                        self.wz[j][i] = step_np1[j//self.details][i//self.details]
-                    else:
-                        self.wz[j][i] = self.H # borders condition
-                    v = vertex.getData3f()
-                    vertex.setData3f(v[0], v[1], self.wz[j][i])
-                    n = np.array([v[0], v[1], self.wz[j][i]])
-                    norm = n / np.linalg.norm(n)
-                    normal.setData3f(norm[0], norm[1], norm[2])
-            # Extend Water Borders
-            vertex = GeomVertexRewriter(self.water_border_vdata, 'vertex')
-            normal = GeomVertexRewriter(self.water_border_vdata, 'normal')
-            for i in range(0, 8, 2):
+        
+        step_np1 = self.water_physic() 
+        vertex = GeomVertexRewriter(self.water_vdata, 'vertex')
+        normal = GeomVertexRewriter(self.water_vdata, 'normal')
+        for j in range(0, self.n_points, self.details):
+            for i in range(0, self.n_points, self.details):
+                # Flood
+                if j != 0 and i != 0 and j != self.n_points - self.details and \
+                                        i != self.n_points - self.details:
+                    self.wz[j][i] = step_np1[j//self.details][i//self.details]
+                else:
+                    self.wz[j][i] = self.H # borders condition
                 v = vertex.getData3f()
-                vertex.setData3f(v[0], v[1], self.H)
-                n = np.array([v[0], v[1], self.H])
+                vertex.setData3f(v[0], v[1], self.wz[j][i])
+                n = np.array([v[0], v[1], self.wz[j][i]])
                 norm = n / np.linalg.norm(n)
                 normal.setData3f(norm[0], norm[1], norm[2])
-                v = vertex.getData3f()
-                vertex.setData3f(v[0], v[1], 0)
-                n = np.array([v[0], v[1], 1e-12])
-                norm = n / np.linalg.norm(n)
-                normal.setData3f(norm[0], norm[1], norm[2])
-        else:
-            task.done()
-        self.H = task.time + 1
+        # Extend Water Borders
+        vertex = GeomVertexRewriter(self.water_border_vdata, 'vertex')
+        normal = GeomVertexRewriter(self.water_border_vdata, 'normal')
+        for i in range(0, 8, 2):
+            v = vertex.getData3f()
+            vertex.setData3f(v[0], v[1], self.H)
+            n = np.array([v[0], v[1], self.H])
+            norm = n / np.linalg.norm(n)
+            normal.setData3f(norm[0], norm[1], norm[2])
+            v = vertex.getData3f()
+            vertex.setData3f(v[0], v[1], 0)
+            n = np.array([v[0], v[1], 1e-12])
+            norm = n / np.linalg.norm(n)
+            normal.setData3f(norm[0], norm[1], norm[2])
+            
+        if self.flush == False and self.H < self.n_points:
+            self.H += self.dt
+        elif self.flush == True and self.H > 1:
+            self.H -= self.dt
+        
         return task.cont
 
     def rain(self, task):
@@ -308,10 +314,10 @@ class MyApp(ShowBase):
             
         return task.cont
     
-    def flush(self, task):
-        return task.cont
-    
     def water_physic(self):
+        # recalc dt to avoid explosion as H grows
+        self.dt = 0.1*min(self.dx, self.dy)/np.sqrt(self.g * self.H)
+
         step_n = np.zeros((self.N_x, self.N_y))    # To hold eta at current time step
         step_np1 = np.zeros((self.N_x, self.N_y))  # To hold eta at next time step
 
@@ -332,7 +338,7 @@ class MyApp(ShowBase):
         vhns = np.zeros((self.N_x, self.N_y))
 
         # Computing values for u and v at next time step
-        u_np1[:-1, :] = self.u_n[:-1, :] - self.g*self.dt/self.dx*(step_n[1:, :] - step_n[:-1, :])
+        u_np1[:-1, :] = self.u_n[:-1, :] - self.g * self.dt/self.dx*(step_n[1:, :] - step_n[:-1, :])
         v_np1[:, :-1] = self.v_n[:, :-1] - self.g * self.dt/self.dy*(step_n[:, 1:] - step_n[:, :-1])
         v_np1[:, -1] = 0.0      # Northern boundary condition
         u_np1[-1, :] = 0.0      # Eastern boundary condition
