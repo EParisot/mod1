@@ -344,9 +344,9 @@ class MyApp(ShowBase):
         for j in range(0, self.n_points, self.details):
             for i in range(0, self.n_points, self.details):
                 if step_n[j//self.details][i//self.details] <= self.lz[j][i]:
-                    if step_n[(j-1)//self.details][(i-1)//self.details] <= self.lz[j-1][i-1]:
-                        v_np1[(j-1)//self.details][(i-1)//self.details] = 0.0
-                        u_np1[(j-1)//self.details][(i-1)//self.details] = 0.0
+                    if step_n[(j-self.details)//self.details][(i-self.details)//self.details] <= self.lz[j-self.details][i-self.details]:
+                        v_np1[(j-self.details)//self.details][(i-self.details)//self.details] = 0.0
+                        u_np1[(j-self.details)//self.details][(i-self.details)//self.details] = 0.0
                     else:
                         v_np1[j//self.details][i//self.details] = 0.0
                         u_np1[j//self.details][i//self.details] = 0.0
