@@ -1,8 +1,9 @@
 from direct.showbase.ShowBase import ShowBase
 from direct.showbase import DirectObject
-from panda3d.core import loadPrcFileData, Geom, GeomTriangles, GeomNode, GeomVertexFormat, GeomVertexData, \
+from panda3d.core import loadPrcFileData, Geom, GeomTriangles, GeomPoints, \
+                         GeomNode, GeomVertexFormat, GeomVertexData, \
                          GeomVertexWriter, GeomVertexRewriter, GeomVertexReader, \
-                         DirectionalLight, TransparencyAttrib
+                         DirectionalLight, TransparencyAttrib, AntialiasAttrib
 import numpy as np
 
 loadPrcFileData("", "window-title Mod1")
@@ -84,6 +85,7 @@ class MyApp(ShowBase):
         # Init Meshes
         self.landscape_nodePath = self.draw_landscape_mesh()
         self.draw_water_mesh()
+        self.draw_rain_mesh()
         self.create_light()
 
         # Wait for events
@@ -122,7 +124,7 @@ class MyApp(ShowBase):
                 elif self.lz[j][i] < 80:
                     color.addData4f(0.7, 0.7, 0.7, 1)
                 else:
-                    color.addData4(0.8, 1, 1, 1)
+                    color.addData4f(0.8, 1, 1, 1)
                 # Terrain Normals
                 if self.lz[j][i] != 0:
                     n = np.array([self.x[j][i], self.y[j][i], self.lz[j][i]])
@@ -148,6 +150,7 @@ class MyApp(ShowBase):
         node.addGeom(geom)
         landscape_nodePath = render.attachNewNode(node)
         landscape_nodePath.setPos(-50, -50, 0)
+        landscape_nodePath.setAntialias(AntialiasAttrib.MAuto)
         return landscape_nodePath
 
     def draw_water_mesh(self):
@@ -190,6 +193,7 @@ class MyApp(ShowBase):
         node.addGeom(geom)
         water_nodePath = render.attachNewNode(node)
         water_nodePath.setTransparency(TransparencyAttrib.MAlpha)
+        water_nodePath.setAntialias(AntialiasAttrib.MAuto)
         water_nodePath.setPos(-50, -50, 0)
 
         # Border
@@ -228,11 +232,41 @@ class MyApp(ShowBase):
         node.addGeom(geom)
         water_border_nodePath = render.attachNewNode(node)
         water_border_nodePath.setTransparency(TransparencyAttrib.MAlpha)
+        water_border_nodePath.setAntialias(AntialiasAttrib.MAuto)
         water_border_nodePath.setPos(-50, -50, 0)
 
+    def draw_rain_mesh(self):
+        _format = GeomVertexFormat.get_v3cp()
+        self.rain_vdata = GeomVertexData('rain', _format, Geom.UHDynamic)
+        self.rain_vdata.setNumRows(self.n_points**2)
+        vertex = GeomVertexWriter(self.rain_vdata, 'vertex')
+        color = GeomVertexWriter(self.rain_vdata, 'color')
+        for j in range(self.n_points):
+            for i in range(self.n_points):
+                # Rain Vertices
+                vertex.addData3f(self.x[j][i], self.y[j][i], self.n_points)
+                # Rain Colors
+                color.addData4f(0.3, 0.3, 1, 0)
+        # Rain Primitive
+        prim = GeomPoints(Geom.UHDynamic)
+        for j in range(self.n_points):
+            for i in range(self.n_points):
+                if j != self.n_points-1 and i != self.n_points-1:
+                    prim.add_vertices(j*(self.n_points) + i,
+                                      j*(self.n_points) + (i+1),
+                                      (j+1)*(self.n_points) + i)
+        geom = Geom(self.rain_vdata)
+        prim.closePrimitive()
+        geom.addPrimitive(prim)
+        node = GeomNode('gnode')
+        node.addGeom(geom)
+        rain_nodePath = render.attachNewNode(node)
+        rain_nodePath.setTransparency(TransparencyAttrib.MAlpha)
+        rain_nodePath.setAntialias(AntialiasAttrib.MAuto)
+        rain_nodePath.setPos(-50, -50, 0)
+        
     def flood(self, task):
         # Animate Water Surface
-        
         step_np1 = self.water_physic() 
         vertex = GeomVertexRewriter(self.water_vdata, 'vertex')
         normal = GeomVertexRewriter(self.water_vdata, 'normal')
@@ -263,12 +297,18 @@ class MyApp(ShowBase):
             n = np.array([v[0], v[1], 1e-12])
             norm = n / np.linalg.norm(n)
             normal.setData3f(norm[0], norm[1], norm[2])
-            
+        # animate level
         if self.flush == False and self.H < self.n_points:
             self.H += self.dt
         elif self.flush == True and self.H > 1:
             self.H -= self.dt
-        
+            # handle last puddles
+            for j in range(0, self.n_points, self.details):
+                for i in range(0, self.n_points, self.details):
+                    if self.wz[j][i] > self.H and \
+                                self.wz[j][i] > self.lz[j][i] and \
+                                self.wz[j][i] - self.lz[j][i] < self.details:
+                        self.wz[j][i] -= self.dt
         return task.cont
     
     def wave(self, task):
@@ -307,8 +347,32 @@ class MyApp(ShowBase):
             normal.setData3f(norm[0], norm[1], norm[2])
             
         return task.cont
-    
+        
     def rain(self, task):
+        speed = 1.0
+        # Animate Rain 
+        vertex = GeomVertexRewriter(self.rain_vdata, 'vertex')
+        color = GeomVertexWriter(self.rain_vdata, 'color')
+        moving = np.random.choice([0, 1], size=(self.n_points, self.n_points),
+                                  p=[(self.n_points-1)/self.n_points, 1./self.n_points])
+        for j in range(self.n_points):
+            for i in range(self.n_points):
+                # rain
+                v = vertex.getData3f()
+                if v[2] <= self.n_points - speed and (v[2] >= self.lz[j][i] or v[2] >= self.wz[j][i]):
+                    vertex.setData3f(v[0], v[1], v[2]-speed)
+                    color.setData4f(0.3, 0.3, 1, 1)
+                elif v[2] <= self.lz[j][i] or v[2] <= self.wz[j][i]:
+                    #TODO handle rolling drops 
+                    vertex.setData3f(v[0], v[1], self.n_points)
+                    color.setData4f(0.3, 0.3, 1, 0)
+                else:
+                    if moving[j][i] == 1:
+                        vertex.setData3f(v[0], v[1], v[2]-speed)
+                        color.setData4f(0.3, 0.3, 1, 1)
+                    else:
+                        vertex.setData3f(v[0], v[1], v[2])
+                        color.setData4f(0.3, 0.3, 1, 0)
         return task.cont
 
     def water_physic(self):
