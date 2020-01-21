@@ -344,19 +344,25 @@ class MyApp(ShowBase):
         for j in range(0, self.n_points, self.details):
             for i in range(0, self.n_points, self.details):
                 if step_n[j//self.details][i//self.details] <= self.lz[j][i]:
-                    v_np1[j//self.details][i//self.details] = 0.0
-                    u_np1[j//self.details][i//self.details] = 0.0
+                    if step_n[(j-1)//self.details][(i-1)//self.details] <= self.lz[j-1][i-1]:
+                        v_np1[(j-1)//self.details][(i-1)//self.details] = 0.0
+                        u_np1[(j-1)//self.details][(i-1)//self.details] = 0.0
+                    else:
+                        v_np1[j//self.details][i//self.details] = 0.0
+                        u_np1[j//self.details][i//self.details] = 0.0
 
         # Computing arrays needed for the upwind scheme in the eta equation.
         h_e[:-1, :] = np.where(u_np1[:-1, :] > 0, step_n[:-1, :] + self.H, step_n[1:, :] + self.H)
         h_e[-1, :] = step_n[-1, :] + self.H
-        h_w[0, :] = step_n[0, :] + self.H
+        
         h_w[1:, :] = np.where(u_np1[:-1, :] > 0, step_n[:-1, :] + self.H, step_n[1:, :] + self.H)
+        h_w[0, :] = step_n[0, :] + self.H
+
         h_n[:, :-1] = np.where(v_np1[:, :-1] > 0, step_n[:, :-1] + self.H, step_n[:, 1:] + self.H)
         h_n[:, -1] = step_n[:, -1] + self.H
-        h_s[:, 0] = step_n[:, 0] + self.H
+        
         h_s[:, 1:] = np.where(v_np1[:, :-1] > 0, step_n[:, :-1] + self.H, step_n[:, 1:] + self.H)
-
+        h_s[:, 0] = step_n[:, 0] + self.H
 
         uhwe[0, :] = u_np1[0, :]*h_e[0, :]
         uhwe[1:, :] = u_np1[1:, :]*h_e[1:, :] - u_np1[:-1, :]*h_w[1:, :]
