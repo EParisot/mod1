@@ -320,43 +320,41 @@ class MyApp(ShowBase):
         return task.cont
         
     def rain(self, task):
-        if self.rain_flood == True:
-            # Animate Water Surface
-            step_np1 = self.water_physic()
-            vertex = GeomVertexRewriter(self.water_vdata, 'vertex')
-            normal = GeomVertexRewriter(self.water_vdata, 'normal')
-            for j in range(0, self.n_points, self.details):
-                for i in range(0, self.n_points, self.details):
-                    # Flood
-                    if j != 0 and i != 0 and j != self.n_points - self.details and \
-                                            i != self.n_points - self.details:
-                        self.wz[j][i] = step_np1[j//self.details][i//self.details]
-                    else:
-                        self.wz[j][i] = self.H # borders condition
-                    v = vertex.getData3f()
-                    vertex.setData3f(v[0], v[1], self.wz[j][i])
-                    n = np.array([v[0], v[1], self.wz[j][i]])
-                    norm = n / np.linalg.norm(n)
-                    normal.setData3f(norm[0], norm[1], norm[2])
-            # Extend Water Borders
-            vertex = GeomVertexRewriter(self.water_border_vdata, 'vertex')
-            normal = GeomVertexRewriter(self.water_border_vdata, 'normal')
-            for i in range(0, 8, 2):
+
+        # Animate Water Surface
+        step_np1 = self.water_physic()
+        vertex = GeomVertexRewriter(self.water_vdata, 'vertex')
+        normal = GeomVertexRewriter(self.water_vdata, 'normal')
+        for j in range(0, self.n_points, self.details):
+            for i in range(0, self.n_points, self.details):
+                # Flood
+                if j != 0 and i != 0 and j != self.n_points - self.details and \
+                                        i != self.n_points - self.details:
+                    self.wz[j][i] = step_np1[j//self.details][i//self.details]
+                else:
+                    self.wz[j][i] = self.H # borders condition
                 v = vertex.getData3f()
-                vertex.setData3f(v[0], v[1], self.H)
-                n = np.array([v[0], v[1], self.H])
+                vertex.setData3f(v[0], v[1], self.wz[j][i])
+                n = np.array([v[0], v[1], self.wz[j][i]])
                 norm = n / np.linalg.norm(n)
                 normal.setData3f(norm[0], norm[1], norm[2])
-                v = vertex.getData3f()
-                vertex.setData3f(v[0], v[1], 0)
-                n = np.array([v[0], v[1], 1e-12])
-                norm = n / np.linalg.norm(n)
-                normal.setData3f(norm[0], norm[1], norm[2])
-            # animate level
-            if self.flush == False and self.H < self.n_points:
-                self.H += self.dt
-            elif self.flush == True and self.H > 1:
-                self.H -= self.dt
+        # Extend Water Borders
+        vertex = GeomVertexRewriter(self.water_border_vdata, 'vertex')
+        normal = GeomVertexRewriter(self.water_border_vdata, 'normal')
+        for i in range(0, 8, 2):
+            v = vertex.getData3f()
+            vertex.setData3f(v[0], v[1], self.H)
+            n = np.array([v[0], v[1], self.H])
+            norm = n / np.linalg.norm(n)
+            normal.setData3f(norm[0], norm[1], norm[2])
+            v = vertex.getData3f()
+            vertex.setData3f(v[0], v[1], 0)
+            n = np.array([v[0], v[1], 1e-12])
+            norm = n / np.linalg.norm(n)
+            normal.setData3f(norm[0], norm[1], norm[2])
+        # animate level
+        if self.rain_flood == True and self.H < self.n_points:
+            self.H += self.dt
         # Animate Rain 
         speed = 1.0
         vertex = GeomVertexRewriter(self.rain_vdata, 'vertex')
@@ -454,7 +452,8 @@ class MyApp(ShowBase):
                         vertex.setData3f(i , j, self.rz[j][i])
                         color.setData4f(0.3, 0.3, 1, 0)
         if moved == 0:
-            return task.done()
+            self.rain_flood = False
+            #return task.done()
         return task.cont
 
     def water_physic(self):
