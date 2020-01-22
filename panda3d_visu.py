@@ -472,9 +472,15 @@ class MyApp(ShowBase):
                                     color.setData4f(0.3, 0.3, 1, 0)
                                 moved += 1
                         else:
-                            if self.rz[v[1]][v[0]] >= 1:
-                                #TODO handle puddles
-                                pass
+                            if self.rz[v[1]][v[0]] >= self.wz[v[1]][v[0]]:
+                                # handle puddles
+                                self.wz[v[1]][v[0]] = self.lz[v[1]][v[0]] + self.H
+                                self.wz[v[1]+self.details][v[0]] = self.lz[v[1]][v[0]] + self.H
+                                self.wz[v[1]][v[0]+self.details] = self.lz[v[1]][v[0]] + self.H
+                                self.wz[v[1]+self.details][v[0]+self.details] = self.lz[v[1]][v[0]] + self.H
+                                self.wz[v[1]-self.details][v[0]] = self.lz[v[1]][v[0]] + self.H
+                                self.wz[v[1]][v[0]-self.details] = self.lz[v[1]][v[0]] + self.H
+                                self.wz[v[1]-self.details][v[0]-self.details] = self.lz[v[1]][v[0]] + self.H
                             color.setData4f(0.3, 0.3, 1, 0)
                             self.rz[j][i] = self.n_points
                             vertex.setData3f(i , j, self.rz[j][i])
