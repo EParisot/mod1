@@ -1,10 +1,10 @@
 from direct.showbase.ShowBase import ShowBase
-from direct.showbase import DirectObject
 from panda3d.core import loadPrcFileData, Geom, GeomTriangles, GeomPoints, \
                          GeomNode, GeomVertexFormat, GeomVertexData, \
                          GeomVertexWriter, GeomVertexRewriter, GeomVertexReader, \
                          DirectionalLight, TransparencyAttrib, AntialiasAttrib
 import numpy as np
+from event_handler import Events_Handler
 
 loadPrcFileData("", "window-title Mod1")
 loadPrcFileData("", "fullscreen 0") # Set to 1 for fullscreen
@@ -12,47 +12,6 @@ loadPrcFileData("", "win-size 1280 720")
 loadPrcFileData("", "show-frame-rate-meter #t")
 loadPrcFileData("", "framebuffer-multisample 1")
 loadPrcFileData("", "multisamples 2")
-
-class Events_Handler(DirectObject.DirectObject):
-    def __init__(self, base):
-        self.base = base
-        self.flood = False
-        self.rain = False
-        self.wave = False
-        self.accept("f", self.handle_flood)
-        self.accept("r", self.handle_rain)
-        self.accept("w", self.handle_wave)
-
-    def handle_flood(self):
-        if self.flood == True:
-            self.base.taskMgr.remove("flood")
-            self.base.flush = not self.base.flush
-        elif self.wave == False and self.rain == False:
-            self.base.taskMgr.removeTasksMatching("flood")
-            self.base.taskMgr.add(self.base.flood, "flood")
-        self.flood = not self.flood
-
-    def handle_rain(self):
-        if self.rain == True:
-            #self.base.taskMgr.remove("rain")
-            self.base.raining = False
-        elif self.flood == False and self.wave == False:
-            self.base.raining = True
-            self.base.taskMgr.removeTasksMatching("rain")
-            self.base.taskMgr.add(self.base.rain, "rain")
-        self.rain = not self.rain
-
-    def handle_wave(self):
-        if self.wave == True:
-            self.base.taskMgr.remove("wave")
-        elif self.rain == False and self.flood == False:
-            # Initial condition for wave.
-            for i in range(10):
-                self.base.wz[:, i:i+1] = (20 + self.base.H) * np.cos((i+1)/10)             # Wave start
-            self.base.taskMgr.removeTasksMatching("wave")
-            self.base.taskMgr.add(self.base.wave, "wave")
-        self.wave = not self.wave
-
 
 class MyApp(ShowBase):
     def __init__(self, landscape, n_points):
@@ -392,9 +351,8 @@ class MyApp(ShowBase):
                 self.H += self.dt
             elif self.flush == True and self.H > 1:
                 self.H -= self.dt
-
-        speed = 1.0
         # Animate Rain 
+        speed = 1.0
         vertex = GeomVertexRewriter(self.rain_vdata, 'vertex')
         color = GeomVertexWriter(self.rain_vdata, 'color')
         moving = np.random.choice([0, 1], size=(self.n_points, self.n_points),
@@ -489,7 +447,6 @@ class MyApp(ShowBase):
                         self.rz[j][i] = self.n_points
                         vertex.setData3f(i , j, self.rz[j][i])
                         color.setData4f(0.3, 0.3, 1, 0)
-
         if moved == 0:
             return task.done()
         return task.cont
@@ -526,13 +483,14 @@ class MyApp(ShowBase):
         # Obstacles boundary condition
         for j in range(0, self.n_points, self.details):
             for i in range(0, self.n_points, self.details):
-                if step_n[j//self.details][i//self.details] <= np.max(self.lz[j:j+self.details, i:i+self.details]):
-                    if step_n[(j-self.details)//self.details][(i-self.details)//self.details] <= np.max(self.lz[j-self.details:j, i-self.details:i]):
-                        v_np1[(j-self.details)//self.details][(i-self.details)//self.details] = 0.0
-                        u_np1[(j-self.details)//self.details][(i-self.details)//self.details] = 0.0
-                    else:
-                        v_np1[j//self.details][i//self.details] = 0.0
-                        u_np1[j//self.details][i//self.details] = 0.0
+                if i > 0 and j > 0:
+                    if step_n[j//self.details][i//self.details] <= np.max(self.lz[j-self.details//2:j+self.details//2, i-self.details//2:i+self.details//2]):
+                        if step_n[(j-self.details)//self.details][(i-self.details)//self.details] <= np.max(self.lz[j-self.details:j, i-self.details:i]):
+                            v_np1[(j-self.details)//self.details][(i-self.details)//self.details] = 0.0
+                            u_np1[(j-self.details)//self.details][(i-self.details)//self.details] = 0.0
+                        else:
+                            v_np1[j//self.details][i//self.details] = 0.0
+                            u_np1[j//self.details][i//self.details] = 0.0
 
         # Computing arrays needed for the upwind scheme in the eta equation.
         h_e[:-1, :] = np.where(u_np1[:-1, :] > 0, step_n[:-1, :] + self.H, step_n[1:, :] + self.H)
