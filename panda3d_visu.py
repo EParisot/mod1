@@ -23,8 +23,7 @@ class MyApp(ShowBase):
         self.n_points = n_points
         self.details = 4
         self.H = 1                                                          # Depth of fluid [m] at start
-        self.flush = False
-        self.rain_flood = False
+
         self.g = 9.81                                                       # Acceleration of gravity [m/s^2]
         self.N_x = self.n_points // self.details                            # Number of grid points in x-direction
         self.N_y = self.n_points // self.details                            # Number of grid points in y-direction
@@ -52,6 +51,8 @@ class MyApp(ShowBase):
         self.create_light()
 
         self.raining = False
+        self.flush = False
+        self.rain_flood = False
 
         # Wait for events
         Events_Handler(self)
@@ -320,7 +321,6 @@ class MyApp(ShowBase):
         return task.cont
         
     def rain(self, task):
-
         # Animate Water Surface
         step_np1 = self.water_physic()
         vertex = GeomVertexRewriter(self.water_vdata, 'vertex')
@@ -400,7 +400,7 @@ class MyApp(ShowBase):
                                                 self.lz[v[1]][v[0]-1]])
                         diff_list = self.lz[v[1]][v[0]] - diff_list
                         max_idx = np.argmax(diff_list)
-                        if diff_list[max_idx] != 0:
+                        if diff_list[max_idx] > 1e-12:
                             if max_idx == 0:
                                 self.rz[j][i] = self.lz[v[1]+1][v[0]]
                                 vertex.setData3f(v[0], v[1]+1, self.rz[j][i])
@@ -453,7 +453,6 @@ class MyApp(ShowBase):
                         color.setData4f(0.3, 0.3, 1, 0)
         if moved == 0:
             self.rain_flood = False
-            #return task.done()
         return task.cont
 
     def water_physic(self):
