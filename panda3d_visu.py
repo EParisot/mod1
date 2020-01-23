@@ -229,7 +229,15 @@ class MyApp(ShowBase):
         rain_nodePath.setAntialias(AntialiasAttrib.MAuto)
         rain_nodePath.setRenderModeThickness(2)
         rain_nodePath.setPos(-50, -50, 0)
-        
+
+    def handle_last_puddles(self):
+        for j in range(0, self.n_points, self.details):
+            for i in range(0, self.n_points, self.details):
+                if self.wz[j][i] > self.H and \
+                            self.wz[j][i] > self.lz[j][i] and \
+                            self.wz[j][i] - self.lz[j][i] < 10:
+                    self.wz[j][i] -= self.dt
+
     def flood(self, task=None):
         # Animate Water Surface
         step_np1 = self.water_physic()
@@ -268,15 +276,10 @@ class MyApp(ShowBase):
         elif self.flush == True and self.H > 1:
             self.H -= self.dt
             # handle last puddles
-            for j in range(0, self.n_points, self.details):
-                for i in range(0, self.n_points, self.details):
-                    if self.wz[j][i] > self.H and \
-                                self.wz[j][i] > self.lz[j][i] and \
-                                self.wz[j][i] - self.lz[j][i] < 10:
-                        self.wz[j][i] -= self.dt
+            self.handle_last_puddles()
         if task:
             return task.cont
-    
+
     def wave(self, task):
         # Compute physic
         step_np1 = self.water_physic()
@@ -312,12 +315,7 @@ class MyApp(ShowBase):
             norm = n / np.linalg.norm(n)
             normal.setData3f(norm[0], norm[1], norm[2])
         # handle last puddles
-        for j in range(0, self.n_points, self.details):
-            for i in range(0, self.n_points, self.details):
-                if self.wz[j][i] > self.H and \
-                            self.wz[j][i] > self.lz[j][i] and \
-                            self.wz[j][i] - self.lz[j][i] < 10:
-                    self.wz[j][i] -= self.dt
+        self.handle_last_puddles()
         return task.cont
         
     def rain(self, task):
