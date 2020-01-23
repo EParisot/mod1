@@ -23,7 +23,6 @@ class MyApp(ShowBase):
         self.n_points = n_points
         self.details = 4
         self.H = 1                                                          # Depth of fluid [m] at start
-
         self.g = 9.81                                                       # Acceleration of gravity [m/s^2]
         self.N_x = self.n_points // self.details                            # Number of grid points in x-direction
         self.N_y = self.n_points // self.details                            # Number of grid points in y-direction
@@ -52,7 +51,7 @@ class MyApp(ShowBase):
 
         self.raining = False
         self.flush = False
-        self.rain_flood = False
+        self.flooding = False
 
         # Wait for events
         Events_Handler(self)
@@ -231,7 +230,7 @@ class MyApp(ShowBase):
         rain_nodePath.setRenderModeThickness(2)
         rain_nodePath.setPos(-50, -50, 0)
         
-    def flood(self, task):
+    def flood(self, task=None):
         # Animate Water Surface
         step_np1 = self.water_physic()
         vertex = GeomVertexRewriter(self.water_vdata, 'vertex')
@@ -264,7 +263,7 @@ class MyApp(ShowBase):
             norm = n / np.linalg.norm(n)
             normal.setData3f(norm[0], norm[1], norm[2])
         # animate level
-        if self.flush == False and self.H < self.n_points:
+        if self.flooding == True and self.flush == False and self.H < self.n_points:
             self.H += self.dt
         elif self.flush == True and self.H > 1:
             self.H -= self.dt
@@ -273,9 +272,10 @@ class MyApp(ShowBase):
                 for i in range(0, self.n_points, self.details):
                     if self.wz[j][i] > self.H and \
                                 self.wz[j][i] > self.lz[j][i] and \
-                                self.wz[j][i] - self.lz[j][i] < self.details:
+                                self.wz[j][i] - self.lz[j][i] < 10:
                         self.wz[j][i] -= self.dt
-        return task.cont
+        if task:
+            return task.cont
     
     def wave(self, task):
         # Compute physic
@@ -316,45 +316,13 @@ class MyApp(ShowBase):
             for i in range(0, self.n_points, self.details):
                 if self.wz[j][i] > self.H and \
                             self.wz[j][i] > self.lz[j][i] and \
-                            self.wz[j][i] - self.lz[j][i] < self.details:
+                            self.wz[j][i] - self.lz[j][i] < 10:
                     self.wz[j][i] -= self.dt
         return task.cont
         
     def rain(self, task):
-        # Animate Water Surface
-        step_np1 = self.water_physic()
-        vertex = GeomVertexRewriter(self.water_vdata, 'vertex')
-        normal = GeomVertexRewriter(self.water_vdata, 'normal')
-        for j in range(0, self.n_points, self.details):
-            for i in range(0, self.n_points, self.details):
-                # Flood
-                if j != 0 and i != 0 and j != self.n_points - self.details and \
-                                        i != self.n_points - self.details:
-                    self.wz[j][i] = step_np1[j//self.details][i//self.details]
-                else:
-                    self.wz[j][i] = self.H # borders condition
-                v = vertex.getData3f()
-                vertex.setData3f(v[0], v[1], self.wz[j][i])
-                n = np.array([v[0], v[1], self.wz[j][i]])
-                norm = n / np.linalg.norm(n)
-                normal.setData3f(norm[0], norm[1], norm[2])
-        # Extend Water Borders
-        vertex = GeomVertexRewriter(self.water_border_vdata, 'vertex')
-        normal = GeomVertexRewriter(self.water_border_vdata, 'normal')
-        for i in range(0, 8, 2):
-            v = vertex.getData3f()
-            vertex.setData3f(v[0], v[1], self.H)
-            n = np.array([v[0], v[1], self.H])
-            norm = n / np.linalg.norm(n)
-            normal.setData3f(norm[0], norm[1], norm[2])
-            v = vertex.getData3f()
-            vertex.setData3f(v[0], v[1], 0)
-            n = np.array([v[0], v[1], 1e-12])
-            norm = n / np.linalg.norm(n)
-            normal.setData3f(norm[0], norm[1], norm[2])
         # animate level
-        if self.rain_flood == True and self.H < self.n_points:
-            self.H += self.dt
+        self.flood()
         # Animate Rain 
         speed = 1.0
         vertex = GeomVertexRewriter(self.rain_vdata, 'vertex')
@@ -392,7 +360,6 @@ class MyApp(ShowBase):
                 else:
                     # handle rolling drops
                     v = list(map(int, v))
-
                     if v[1]+1 < self.n_points and v[0]+1 < self.n_points and v[1]-1 >= 0 and v[0]-1 >= 0:
                         diff_list = np.array([self.lz[v[1]+1][v[0]], 
                                                 self.lz[v[1]][v[0]+1], 
@@ -446,13 +413,14 @@ class MyApp(ShowBase):
                             color.setData4f(0.3, 0.3, 1, 0)
                             self.rz[j][i] = self.n_points
                             vertex.setData3f(i , j, self.rz[j][i])
-                            self.rain_flood = True
+                            self.flooding = True
                     else:
                         self.rz[j][i] = self.n_points
                         vertex.setData3f(i , j, self.rz[j][i])
                         color.setData4f(0.3, 0.3, 1, 0)
         if moved == 0:
-            self.rain_flood = False
+            self.flooding = False
+            return task.done
         return task.cont
 
     def water_physic(self):
