@@ -15,13 +15,15 @@ loadPrcFileData("", "multisamples 2")
 
 class Mod1App(ShowBase):
     def __init__(self, landscape, n_points):
-        self.x = landscape[0]
-        self.y = landscape[1]
-        self.lz = landscape[2]
-        self.wz = np.ones((n_points, n_points))
-        self.rz = np.zeros((n_points, n_points)) + n_points
         self.n_points = n_points
         self.details = 4
+
+        self.x = landscape[0]
+        self.y = landscape[1]
+        self.lz = landscape[2]                                              # landscape heights
+        self.wz = np.ones((n_points, n_points))                             # water heights
+        self.rz = np.zeros((n_points, n_points)) + n_points                 # rain heights
+
         self.H = 1                                                          # Depth of fluid [m] at start
         self.g = 9.81                                                       # Acceleration of gravity [m/s^2]
         self.N_x = self.n_points // self.details                            # Number of grid points in x-direction
