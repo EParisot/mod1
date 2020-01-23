@@ -5,24 +5,32 @@ import time
 from panda3d_visu import panda3d_draw_landscape
 
 
-def parse_point(line_data):
-    data = line_data.split(' ')
+def parse_point(line_data, n_points):
+    data = line_data.replace("\n", "").split(' ')
     if len(data) == 3:
         try:
             int_data = list(map(int, data))
+            # check for borders values -> z = 0
+            for idx in range(3):
+                if idx < 2 and (int_data[idx] == 0 or int_data[idx] == n_points-1):
+                    int_data[2] = 0
+                    print("Border point %s flatened" % data)
+                if int_data[idx] > n_points or int_data[idx] < 0:
+                    print("Invalid data : %s Ignored Point" % data, flush=True)
+                    return None
         except:
-            print("Invalid data : %s Ignored Point" % line_data, flush=True)
+            print("Invalid data : %s Ignored Point" % data, flush=True)
             return None
     else:
-        print("Incomplete data : %s Ignored Point" % line_data, flush=True)
+        print("Incomplete data : %s Ignored Point" % data, flush=True)
         return None
     return int_data
 
-def parse_file(filename):
+def parse_file(filename, n_points):
     data_list = []
     with open(filename) as f:
         for line in f:
-            clean_data = parse_point(line)
+            clean_data = parse_point(line, n_points)
             if clean_data and clean_data not in data_list:
                 data_list.append(clean_data)
     return data_list
@@ -48,7 +56,7 @@ def simple_idw(x, y, z, xi, yi):
     # Compute distance matrix
     dist = euclidean_distance(x, y, xi, yi)
     # In IDW, weights are 1 / distance !! TWEAKED !!
-    weights = 1.0 / (dist + 1e-12)**3
+    weights = 1.0 / (dist + 1e-12)**4
     # Make weights sum to one
     weights /= weights.sum(axis=0)
     # Multiply the weights for each interpolated point by all observed Z-values
@@ -60,7 +68,7 @@ def simple_idw(x, y, z, xi, yi):
 def main(filename):
     n_points = 100
     # read input
-    points_list = parse_file(filename)
+    points_list = parse_file(filename, n_points)
     x = np.array([point[0] for point in points_list])
     y = np.array([point[1] for point in points_list])
     z = np.array([point[2] for point in points_list])
