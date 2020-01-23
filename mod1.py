@@ -56,7 +56,7 @@ def simple_idw(x, y, z, xi, yi):
     # Compute distance matrix
     dist = euclidean_distance(x, y, xi, yi)
     # In IDW, weights are 1 / distance !! TWEAKED !!
-    weights = 1.0 / (dist + 1e-12)**4
+    weights = 1.0 / (dist + 1e-12)**3
     # Make weights sum to one
     weights /= weights.sum(axis=0)
     # Multiply the weights for each interpolated point by all observed Z-values

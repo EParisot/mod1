@@ -278,7 +278,7 @@ class Mod1App(ShowBase):
         elif self.flush == True and self.H > 1:
             self.H -= self.dt
             # handle last puddles
-            self.handle_last_puddles()
+            #self.handle_last_puddles()
         if task:
             return task.cont
 
@@ -408,8 +408,10 @@ class Mod1App(ShowBase):
                         color.setData4f(0.3, 0.3, 1, 0)
                     moved += 1
             else:
-                if self.rz[v[1]][v[0]] >= self.wz[v[1]][v[0]]:
+                if self.rz[v[1]][v[0]] >= self.wz[v[1]][v[0]]: #TODO avoid splash after max puddle
                     # handle puddles
+                    v[0] += v[0] % self.details
+                    v[1] += v[1] % self.details 
                     self.wz[v[1]][v[0]] = self.lz[v[1]][v[0]] + self.H
                     self.wz[v[1]+self.details][v[0]] = self.lz[v[1]][v[0]] + self.H
                     self.wz[v[1]][v[0]+self.details] = self.lz[v[1]][v[0]] + self.H
