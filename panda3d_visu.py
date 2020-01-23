@@ -13,7 +13,7 @@ loadPrcFileData("", "show-frame-rate-meter #t")
 loadPrcFileData("", "framebuffer-multisample 1")
 loadPrcFileData("", "multisamples 2")
 
-class MyApp(ShowBase):
+class Mod1App(ShowBase):
     def __init__(self, landscape, n_points):
         self.x = landscape[0]
         self.y = landscape[1]
@@ -358,83 +358,87 @@ class MyApp(ShowBase):
                 else:
                     # handle rolling drops
                     v = list(map(int, v))
-                    if v[1]+1 < self.n_points and v[0]+1 < self.n_points and v[1]-1 >= 0 and v[0]-1 >= 0:
-                        diff_list = np.array([self.lz[v[1]+1][v[0]], 
-                                                self.lz[v[1]][v[0]+1], 
-                                                self.lz[v[1]-1][v[0]], 
-                                                self.lz[v[1]][v[0]-1]])
-                        diff_list = self.lz[v[1]][v[0]] - diff_list
-                        max_idx = np.argmax(diff_list)
-                        if diff_list[max_idx] > 1e-12:
-                            if max_idx == 0:
-                                self.rz[j][i] = self.lz[v[1]+1][v[0]]
-                                vertex.setData3f(v[0], v[1]+1, self.rz[j][i])
-                                if self.rz[j][i] > self.wz[j][i]:
-                                    color.setData4f(0.3, 0.3, 1, 1)
-                                else:
-                                    color.setData4f(0.3, 0.3, 1, 0)
-                                moved += 1
-                            elif max_idx == 1:
-                                self.rz[j][i] = self.lz[v[1]][v[0]+1]
-                                vertex.setData3f(v[0]+1, v[1], self.rz[j][i])
-                                if self.rz[j][i] > self.wz[j][i]:
-                                    color.setData4f(0.3, 0.3, 1, 1)
-                                else:
-                                    color.setData4f(0.3, 0.3, 1, 0)
-                                moved += 1
-                            elif max_idx == 2:
-                                self.rz[j][i] = self.lz[v[1]-1][v[0]]
-                                vertex.setData3f(v[0], v[1]-1, self.rz[j][i])
-                                if self.rz[j][i] > self.wz[j][i]:
-                                    color.setData4f(0.3, 0.3, 1, 1)
-                                else:
-                                    color.setData4f(0.3, 0.3, 1, 0)
-                                moved += 1
-                            elif max_idx == 3:
-                                self.rz[j][i] = self.lz[v[1]][v[0]-1]
-                                vertex.setData3f(v[0]-1, v[1], self.rz[j][i])
-                                if self.rz[j][i] > self.wz[j][i]:
-                                    color.setData4f(0.3, 0.3, 1, 1)
-                                else:
-                                    color.setData4f(0.3, 0.3, 1, 0)
-                                moved += 1
-                        else:
-                            if self.rz[v[1]][v[0]] >= self.wz[v[1]][v[0]]:
-                                # handle puddles
-                                self.wz[v[1]][v[0]] = self.lz[v[1]][v[0]] + self.H
-                                self.wz[v[1]+self.details][v[0]] = self.lz[v[1]][v[0]] + self.H
-                                self.wz[v[1]][v[0]+self.details] = self.lz[v[1]][v[0]] + self.H
-                                self.wz[v[1]+self.details][v[0]+self.details] = self.lz[v[1]][v[0]] + self.H
-                                self.wz[v[1]-self.details][v[0]] = self.lz[v[1]][v[0]] + self.H
-                                self.wz[v[1]][v[0]-self.details] = self.lz[v[1]][v[0]] + self.H
-                                self.wz[v[1]-self.details][v[0]-self.details] = self.lz[v[1]][v[0]] + self.H
-                            color.setData4f(0.3, 0.3, 1, 0)
-                            self.rz[j][i] = self.n_points
-                            vertex.setData3f(i , j, self.rz[j][i])
-                            self.flooding = True
-                    else:
-                        self.rz[j][i] = self.n_points
-                        vertex.setData3f(i , j, self.rz[j][i])
-                        color.setData4f(0.3, 0.3, 1, 0)
+                    moved += self.rolling_drops(v, vertex, color, moved, i, j)
         if moved == 0:
             self.flooding = False
             return task.done
         return task.cont
+    
+    def rolling_drops(self, v, vertex, color, moved, i, j):
+        if v[1]+1 < self.n_points and v[0]+1 < self.n_points and v[1]-1 >= 0 and v[0]-1 >= 0:
+            diff_list = np.array([self.lz[v[1]+1][v[0]], 
+                                    self.lz[v[1]][v[0]+1], 
+                                    self.lz[v[1]-1][v[0]], 
+                                    self.lz[v[1]][v[0]-1]])
+            diff_list = self.lz[v[1]][v[0]] - diff_list
+            max_idx = np.argmax(diff_list)
+            if diff_list[max_idx] > 1e-12:
+                if max_idx == 0:
+                    self.rz[j][i] = self.lz[v[1]+1][v[0]]
+                    vertex.setData3f(v[0], v[1]+1, self.rz[j][i])
+                    if self.rz[j][i] > self.wz[j][i]:
+                        color.setData4f(0.3, 0.3, 1, 1)
+                    else:
+                        color.setData4f(0.3, 0.3, 1, 0)
+                    moved += 1
+                elif max_idx == 1:
+                    self.rz[j][i] = self.lz[v[1]][v[0]+1]
+                    vertex.setData3f(v[0]+1, v[1], self.rz[j][i])
+                    if self.rz[j][i] > self.wz[j][i]:
+                        color.setData4f(0.3, 0.3, 1, 1)
+                    else:
+                        color.setData4f(0.3, 0.3, 1, 0)
+                    moved += 1
+                elif max_idx == 2:
+                    self.rz[j][i] = self.lz[v[1]-1][v[0]]
+                    vertex.setData3f(v[0], v[1]-1, self.rz[j][i])
+                    if self.rz[j][i] > self.wz[j][i]:
+                        color.setData4f(0.3, 0.3, 1, 1)
+                    else:
+                        color.setData4f(0.3, 0.3, 1, 0)
+                    moved += 1
+                elif max_idx == 3:
+                    self.rz[j][i] = self.lz[v[1]][v[0]-1]
+                    vertex.setData3f(v[0]-1, v[1], self.rz[j][i])
+                    if self.rz[j][i] > self.wz[j][i]:
+                        color.setData4f(0.3, 0.3, 1, 1)
+                    else:
+                        color.setData4f(0.3, 0.3, 1, 0)
+                    moved += 1
+            else:
+                if self.rz[v[1]][v[0]] >= self.wz[v[1]][v[0]]:
+                    # handle puddles
+                    self.wz[v[1]][v[0]] = self.lz[v[1]][v[0]] + self.H
+                    self.wz[v[1]+self.details][v[0]] = self.lz[v[1]][v[0]] + self.H
+                    self.wz[v[1]][v[0]+self.details] = self.lz[v[1]][v[0]] + self.H
+                    self.wz[v[1]+self.details][v[0]+self.details] = self.lz[v[1]][v[0]] + self.H
+                    self.wz[v[1]-self.details][v[0]] = self.lz[v[1]][v[0]] + self.H
+                    self.wz[v[1]][v[0]-self.details] = self.lz[v[1]][v[0]] + self.H
+                    self.wz[v[1]-self.details][v[0]-self.details] = self.lz[v[1]][v[0]] + self.H
+                color.setData4f(0.3, 0.3, 1, 0)
+                self.rz[j][i] = self.n_points
+                vertex.setData3f(i , j, self.rz[j][i])
+                self.flooding = True
+        else:
+            self.rz[j][i] = self.n_points
+            vertex.setData3f(i , j, self.rz[j][i])
+            color.setData4f(0.3, 0.3, 1, 0)
+        return moved
 
     def water_physic(self):
         # recalc dt to avoid explosion as H grows
         self.dt = 0.1*min(self.dx, self.dy)/np.sqrt(self.g * self.H)
 
-        step_n = np.zeros((self.N_x, self.N_y))    # To hold eta at current time step
-        step_np1 = np.zeros((self.N_x, self.N_y))  # To hold eta at next time step
+        step_n = np.zeros((self.N_x, self.N_y))
+        step_np1 = np.zeros((self.N_x, self.N_y))
 
         # grab current mesh
         for j in range(0, self.n_points, self.details):
             for i in range(0, self.n_points, self.details):
                 step_n[j//self.details][i//self.details] = self.wz[j][i]
 
-        u_np1 = np.zeros((self.N_x, self.N_y))    # To hold u at next time step
-        v_np1 = np.zeros((self.N_x, self.N_y))    # To hold v at next time step
+        u_np1 = np.zeros((self.N_x, self.N_y))
+        v_np1 = np.zeros((self.N_x, self.N_y))
         
         # Temporary variables (each time step) for upwind scheme in eta equation
         h_e = np.zeros((self.N_x, self.N_y))
@@ -481,13 +485,14 @@ class MyApp(ShowBase):
         vhns[:, 1:] = v_np1[:, 1:]*h_n[:, 1:] - v_np1[:, :-1]*h_s[:, 1:]
 
         # Computing eta values at next time step
-        step_np1[:, :] = step_n[:, :] - self.dt*(uhwe[:, :]/self.dx + vhns[:, :]/self.dy)    # Without source/sink
+        step_np1[:, :] = step_n[:, :] - self.dt*(uhwe[:, :]/self.dx + vhns[:, :]/self.dy)
 
-        self.u_n = np.copy(u_np1)        # Update u for next iteration
-        self.v_n = np.copy(v_np1)        # Update v for next iteration
+        # Update u and v for next iteration
+        self.u_n = np.copy(u_np1)
+        self.v_n = np.copy(v_np1)
 
         return step_np1
     
 def panda3d_draw_landscape(landscape, n_points):
-    app = MyApp(landscape, n_points)
+    app = Mod1App(landscape, n_points)
     app.run()

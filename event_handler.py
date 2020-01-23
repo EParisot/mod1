@@ -35,7 +35,8 @@ class Events_Handler(DirectObject.DirectObject):
         elif self.rain == False and self.base.flooding == False:
             # Initial condition for wave.
             for i in range(10):
-                self.base.wz[:, i:i+1] = (40 + self.base.H) * np.cos((i+1)/10)             # Wave start
+                # Wave start
+                self.base.wz[:, i:i+1] = (40 + self.base.H) * np.cos((i+1)/10)
             self.base.taskMgr.removeTasksMatching("wave")
             self.base.taskMgr.add(self.base.wave, "wave")
         self.wave = not self.wave
