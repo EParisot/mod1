@@ -23,5 +23,5 @@ F : Flood
 R : Rain
 W : Wave
 
-# restrictions
+Restrictions:
 Map points must be integers from [0, 99] (included)
