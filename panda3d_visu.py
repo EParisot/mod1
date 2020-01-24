@@ -408,17 +408,25 @@ class Mod1App(ShowBase):
                         color.setData4f(0.3, 0.3, 1, 0)
                     moved += 1
             else:
-                if self.rz[v[1]][v[0]] >= self.wz[v[1]][v[0]]: #TODO avoid splash after max puddle
-                    # handle puddles
-                    v[0] += v[0] % self.details
-                    v[1] += v[1] % self.details 
-                    self.wz[v[1]][v[0]] = self.lz[v[1]][v[0]] + self.H
-                    self.wz[v[1]+self.details][v[0]] = self.lz[v[1]][v[0]] + self.H
-                    self.wz[v[1]][v[0]+self.details] = self.lz[v[1]][v[0]] + self.H
-                    self.wz[v[1]+self.details][v[0]+self.details] = self.lz[v[1]][v[0]] + self.H
-                    self.wz[v[1]-self.details][v[0]] = self.lz[v[1]][v[0]] + self.H
-                    self.wz[v[1]][v[0]-self.details] = self.lz[v[1]][v[0]] + self.H
-                    self.wz[v[1]-self.details][v[0]-self.details] = self.lz[v[1]][v[0]] + self.H
+                # handle puddles
+                v[0] += v[0] % self.details
+                v[1] += v[1] % self.details
+                if self.wz[v[1]][v[0]] < self.lz[v[1]][v[0]]:     
+                    self.wz[v[1]][v[0]] = self.lz[v[1]][v[0]] + 1
+                    self.wz[v[1]+self.details][v[0]] = self.lz[v[1]][v[0]] + 1
+                    self.wz[v[1]][v[0]+self.details] = self.lz[v[1]][v[0]] + 1
+                    self.wz[v[1]+self.details][v[0]+self.details] = self.lz[v[1]][v[0]] + 1
+                    self.wz[v[1]-self.details][v[0]] = self.lz[v[1]][v[0]] + 1
+                    self.wz[v[1]][v[0]-self.details] = self.lz[v[1]][v[0]] + 1
+                    self.wz[v[1]-self.details][v[0]-self.details] = self.lz[v[1]][v[0]] + 1
+                elif self.wz[v[1]][v[0]] + 1 < self.H:
+                    self.wz[v[1]][v[0]] += 1
+                    self.wz[v[1]+self.details][v[0]] += 1
+                    self.wz[v[1]][v[0]+self.details] += 1
+                    self.wz[v[1]+self.details][v[0]+self.details] += 1
+                    self.wz[v[1]-self.details][v[0]] += 1
+                    self.wz[v[1]][v[0]-self.details] += 1
+                    self.wz[v[1]-self.details][v[0]-self.details] += 1
                 color.setData4f(0.3, 0.3, 1, 0)
                 self.rz[j][i] = self.n_points
                 vertex.setData3f(i , j, self.rz[j][i])
